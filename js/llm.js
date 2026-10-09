@@ -153,7 +153,7 @@ async function runNative(note, onToken) {
   if (!r.ok) throw new Error(`llama-server ${r.status}`);
   // Server-sent events: one JSON chunk per token; the last chunks carry usage and timings.
   const reader = r.body.getReader(), dec = new TextDecoder();
-  let buf = '', out = '', usage = {}, timings = {}, model, first = 0;
+  let buf = '', out = '', usage = {}, timings = {}, model, first = 0, chunks = 0;
   try {
     for (;;) {
       const { value, done } = await reader.read();
@@ -169,7 +169,7 @@ async function runNative(note, onToken) {
         if (j.usage) usage = j.usage;
         if (j.timings) timings = j.timings;
         const t = j.choices?.[0]?.delta?.content;
-        if (t) { first ||= performance.now(); out += t; onToken?.(out); }
+        if (t) { first ||= performance.now(); chunks++; out += t; onToken?.(out); }
       }
       if (looping(out)) { ctrl.abort(); break; }
     }
@@ -177,7 +177,10 @@ async function runNative(note, onToken) {
     if (e.name !== 'AbortError') throw e;
   }
   const ms = Math.round(performance.now() - t0);
-  return { out, ms, tokensIn: usage.prompt_tokens, tokensOut: usage.completion_tokens, cached: timings.cache_n, tps: timings.predicted_per_second, prefillTps: timings.prompt_per_second, model: model || 'Qwen2.5-1.5B GGUF', backend: 'llama.cpp (native, Termux)' };
+  // Streaming puts token counts in `timings` (prompt_n excludes cached tokens); an aborted stream has neither.
+  const tokensIn = usage.prompt_tokens ?? (timings.prompt_n != null ? timings.prompt_n + (timings.cache_n || 0) : undefined);
+  const genSecs = first ? (performance.now() - first) / 1000 : 0;
+  return { out, ms, tokensIn, tokensOut: usage.completion_tokens ?? timings.predicted_n ?? chunks, cached: timings.cache_n, tps: timings.predicted_per_second ?? (genSecs ? chunks / genSecs : undefined), prefillTps: timings.prompt_per_second, model: model || 'Qwen2.5-1.5B GGUF', backend: 'llama.cpp (native, Termux)' };
 }
 
 let tf = null, browser = null;

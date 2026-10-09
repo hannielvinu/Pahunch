@@ -59,6 +59,11 @@ $('#parse').onclick = async () => {
   });
   btn.disabled = false;
   box.hidden = true;
+  const g0 = res.graph;
+  if (g0.parser === 'rules' && !g0.steps.some((s) => s.kind === 'turn' || s.landmark)) {
+    // Nothing route-like in the note (e.g. "Hi"): don't show an empty plan.
+    return toast('No landmarks or turns found. Try something like "past the temple, second left, blue gate opposite MedPlus".');
+  }
   state.parse = res;
   state.graph = res.graph;
   state.graph.ms = Math.round((performance.now() - t0) * 10) / 10;
