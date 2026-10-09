@@ -133,7 +133,8 @@ export class Vision {
     return ctx ? colourThirds(ctx.getImageData(0, 0, this.small.width, this.small.height), colour) : null;
   }
 
-  // Resolves with { words, text, ms } or null if the worker is still busy with the last frame.
+  // Resolves with { words, boxes, text, ms } or null if the worker is still busy with the last frame.
+  // boxes: [{ text, tokens, x, y, w, h }] with x/y/w/h as fractions of the camera frame (0..1).
   async read() {
     if (!this.worker || this.ocrBusy) return null;
     const ctx = this.grab(this.big, 1024);
@@ -142,9 +143,16 @@ export class Vision {
     const t0 = performance.now();
     try {
       const { data } = await this.worker.recognize(this.big);
-      const words = (data.words || []).filter((w) => w.confidence > 45).map((w) => w.text);
+      const W = this.big.width, H = this.big.height;
+      const read = (data.words || []).filter((w) => w.confidence > 45);
+      const boxes = [];
+      for (const w of read) {
+        const tokens = cleanWords(w.text), b = w.bbox;
+        if (!tokens.length || !b) continue;
+        boxes.push({ text: tokens.join(' '), tokens, x: b.x0 / W, y: b.y0 / H, w: (b.x1 - b.x0) / W, h: (b.y1 - b.y0) / H });
+      }
       this.lastOcrMs = Math.round(performance.now() - t0);
-      return { words: cleanWords(words.join(' ')), text: data.text, ms: this.lastOcrMs };
+      return { words: cleanWords(read.map((w) => w.text).join(' ')), boxes, text: data.text, ms: this.lastOcrMs };
     } finally {
       this.ocrBusy = false;
     }

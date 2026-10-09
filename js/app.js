@@ -1,6 +1,7 @@
 import { SAMPLES, describe } from './parser.js';
 import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
+import { Overlay } from './overlay.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
@@ -11,6 +12,7 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 
 const state = { inferences: [], graph: null, i: 0, lang: 'en', asking: false, askCooldown: 0, signSeenAt: 0, startedAt: 0, running: false };
 const vision = new Vision($('#video'));
+const overlay = new Overlay($('#overlay'), $('#video'));
 const compass = new Compass();
 compass.start();
 
@@ -194,13 +196,15 @@ function renderSeen(words, matched) {
 }
 
 function onOcr(res) {
-  if (!res || state.asking) return;
+  if (!res) return;
   $('#ocr-ms').textContent = `OCR ${res.ms} ms`;
   const s = step();
-  if (s.kind === 'turn') return renderSeen(res.words);
-  const m = matchSigns(res.words, s.verify);
+  // Boxes are drawn for every read, also while a question is open: green = this step's sign, red = decoys.
+  const m = s.kind === 'turn' ? { hit: null, word: null } : matchSigns(res.words, s.verify);
+  const confirms = s.kind === 'pass' && m.hit === 'name';
+  overlay.setBoxes(res.boxes, m.word, m.word && `✓ ${m.word} · step ${s.n} ${confirms ? 'confirmed' : 'spotted'}`);
   renderSeen(res.words, m.word);
-  if (!m.hit) return;
+  if (state.asking || !m.hit) return;
   if (s.kind === 'pass') {
     if (m.hit === 'name') confirmStep(T().spotted(spokenName(s.landmark)));
     else ask(spokenName(s.landmark));
@@ -253,6 +257,7 @@ async function startGuide() {
     try { await vision.loadOcr('eng'); } catch (e) { toast(`OCR failed: ${e.message}`); }
   }
   state.running = true;
+  overlay.start();
   announce();
   ocrLoop();
   tick();
@@ -262,6 +267,7 @@ function stopGuide() {
   if (!state.running) return;
   state.running = false;
   clearTimeout(state.raf);
+  overlay.stop();
   vision.stopCamera();
   state.wake?.release?.();
   speechSynthesis?.cancel();
