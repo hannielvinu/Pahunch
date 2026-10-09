@@ -218,7 +218,8 @@ function onOcr(res) {
   if (!s.verify.colour || s.landmark?.name) ask(spokenName(s.landmark));
 }
 
-function onColour(thirds) {
+function onColour(thirds, colour) {
+  overlay.setColour(colour, thirds);
   const bars = $('#colour-bars').children;
   thirds.forEach((v, k) => { bars[k].style.setProperty('--fill', `${Math.min(100, Math.round(v * 250))}%`); bars[k].classList.toggle('on', v >= 0.15); });
   const s = step();
@@ -241,7 +242,7 @@ function tick() {
   const d = state.turn?.delta;
   $('#heading').textContent = compass.heading == null ? 'compass: no sensor' : `heading ${Math.round(compass.heading)}°${d != null ? ` · turned ${Math.round(d)}°` : ''}`;
   const c = step()?.verify.colour;
-  if (c) { const t = vision.colour(c); if (t) onColour(t); }
+  if (c) { const t = vision.colour(c); if (t) onColour(t, c); }
   state.raf = setTimeout(tick, 200);
 }
 

@@ -1,8 +1,12 @@
 // Guide overlay: draws what the phone sees and decides on top of the camera (one canvas, requestAnimationFrame).
-// OCR boxes (green = your landmark, red = decoy) and the turn arrow with its compass arc.
+// OCR boxes (green = your landmark, red = decoy), the turn arrow with its compass arc, and colour thirds.
 import { wordMatches } from './vision.js';
 
 const GREEN = '#2ecc71', RED = '#ff4d4d', AMBER = '#ffb020';
+const PAINT = { red: '#ff3b30', orange: '#ff9500', yellow: '#ffd60a', green: '#30d158', blue: '#2f8bff', pink: '#ff5fa2',
+  brown: '#a2733f', white: '#ffffff', black: '#111111', grey: '#9a9a9a' };
+const THIRDS = ['left', 'centre', 'right'];
+export const COLOUR_ON = 0.15; // share of a third that counts as "colour found" (same threshold as the guide)
 
 // The video uses object-fit: cover, so the frame is scaled to fill the element and the overflow is cropped.
 // Returns how a point at fraction (u, v) of the frame lands on screen: x = ox + u * dw, y = oy + v * dh.
@@ -53,6 +57,12 @@ export class Overlay {
   clearStep() {
     this.turn = null;
     this.turnDone = false;
+    this.colour = null;
+  }
+
+  // Latest colour reading: share of `name` in the left / centre / right thirds of the frame.
+  setColour(name, thirds) {
+    this.colour = { name, thirds, at: performance.now() };
   }
 
   // turn: the step's TurnDetector (reads the live compass delta every frame).
@@ -84,8 +94,29 @@ export class Overlay {
     const v = this.video;
     if (!v.videoWidth) return;
     const m = coverMap(v.videoWidth, v.videoHeight, W, H);
+    if (this.colour && now - this.colour.at < 1000) this.drawColour(ctx, m, W, H);
     this.drawBoxes(ctx, m, now);
     if (this.turn) this.drawTurn(ctx, W, H, now);
+  }
+
+  // Tint each third of the frame where the target colour shows up, labelled e.g. "blue · left".
+  drawColour(ctx, m, W, H) {
+    const { name, thirds } = this.colour, paint = PAINT[name] || AMBER;
+    ctx.save();
+    thirds.forEach((v, k) => {
+      if (v < COLOUR_ON) return;
+      const x0 = Math.max(0, m.ox + (k / 3) * m.dw), x1 = Math.min(W, m.ox + ((k + 1) / 3) * m.dw);
+      if (x1 <= x0) return; // this third is cropped off screen
+      ctx.globalAlpha = Math.min(0.4, 0.12 + v * 0.5);
+      ctx.fillStyle = paint;
+      ctx.fillRect(x0, 0, x1 - x0, H);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 3; ctx.strokeStyle = paint;
+      ctx.strokeRect(x0 + 1.5, 1.5, x1 - x0 - 3, H - 3);
+      const dark = name === 'white' || name === 'yellow';
+      label(ctx, `${name} · ${THIRDS[k]}`, x0 + 8, H * 0.5 - 22, paint, dark ? '#111' : '#fff', 'bold 16px system-ui, sans-serif');
+    });
+    ctx.restore();
   }
 
   // Big arrow in the turn direction, and an arc that fills from 0° to 90° as the compass swings that way.
