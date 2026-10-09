@@ -14,8 +14,8 @@ echo "Model: $MODEL"
 
 if [ -f "$MODEL" ] && command -v llama-server >/dev/null; then
   pkill -f llama-server 2>/dev/null
-  # -t 6: use the big cores; -c 2048: enough for the prompt + few-shot examples.
-  llama-server -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 6 > llama.log 2>&1 &
+  # -t 4: llama.cpp CPU threads; -c 2048: enough for the prompt + few-shot examples.
+  llama-server -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
   LLAMA=$!
   echo "On-device LLM starting (pid $LLAMA, log: llama.log)…"
   for i in $(seq 1 60); do curl -s localhost:8081/health | grep -q ok && { echo "On-device LLM ready."; break; }; sleep 1; done

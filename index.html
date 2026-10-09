@@ -9,6 +9,7 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
   <script src="lib/tesseract/tesseract.min.js" defer></script>
+  <script src="lib/qrcode/qrcode.js" defer></script>
   <script src="js/app.js" type="module"></script>
 </head>
 <body>
@@ -48,6 +49,10 @@
       <progress id="thinking-progress" max="1" hidden></progress>
       <pre id="thinking-out"></pre>
     </div>
+    <details id="doors" class="device" hidden>
+      <summary id="doors-sum">Saved doors</summary>
+      <ul id="doors-list" class="doors"></ul>
+    </details>
     <details class="device">
       <summary>Device check</summary>
       <pre id="device">checking…</pre>
@@ -100,11 +105,30 @@
   </section>
 
   <section id="arrive" class="screen arrive" hidden>
-    <div class="tick">✓</div>
-    <h2>You've arrived</h2>
-    <p id="arrived-what" class="big-meta"></p>
-    <p id="arrived-floor" class="big-meta"></p>
-    <p id="arrived-time" class="meta"></p>
+    <div id="tick" class="tick">✓</div>
+    <h2 id="arrive-title">You've arrived</h2>
+    <article id="card" class="card">
+      <label class="photo" for="photo-in">
+        <img id="card-photo" alt="Door photo" hidden>
+        <span id="photo-hint">📷 Take a photo of the door</span>
+      </label>
+      <input id="photo-in" type="file" accept="image/*" capture="environment" hidden>
+      <p id="arrived-what" class="big-meta"></p>
+      <p id="arrived-floor" class="big-meta"></p>
+      <div class="pin">
+        <span class="meta">DIGIPIN</span>
+        <strong id="card-pin">…</strong>
+        <span id="card-acc" class="meta"></span>
+      </div>
+      <ol id="card-route" class="card-route"></ol>
+      <div id="card-qr" class="qr" aria-label="QR code of this door"></div>
+      <p id="arrived-time" class="meta"></p>
+    </article>
+    <div class="row">
+      <button id="send" class="btn ghost">Send to laptop</button>
+      <button id="locate" class="btn ghost" hidden>Retry GPS</button>
+      <button id="del" class="btn ghost" hidden>Delete</button>
+    </div>
     <button id="again" class="btn primary big">New route</button>
   </section>
 

@@ -77,3 +77,21 @@ select { width: auto; flex: 1; }
 .agree.ok { background: #12301f; color: var(--ok); }
 .agree.warn { background: #3a2410; color: var(--accent); }
 .btn:disabled { opacity: .5; }
+
+/* Door card */
+.arrive { justify-content: flex-start; }
+.card { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.photo { display: grid; place-items: center; gap: 6px; min-height: 120px; border: 2px dashed var(--line); border-radius: 12px; color: var(--accent); cursor: pointer; overflow: hidden; }
+.photo img { width: 100%; max-height: 50vh; object-fit: cover; display: block; }
+.photo:has(img:not([hidden])) { border-style: solid; padding-bottom: 6px; }
+.photo span { font-weight: 600; }
+.pin { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pin strong { font: 700 24px/1.2 ui-monospace, monospace; letter-spacing: 1px; color: var(--accent); }
+.card-route { margin: 0; padding-left: 22px; color: var(--dim); font-size: 15px; }
+.qr { align-self: center; width: min(220px, 70vw); background: #fff; border-radius: 8px; padding: 4px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.qr:empty { display: none; }
+.doors { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.door { width: 100%; display: flex; gap: 10px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; color: var(--text); cursor: pointer; }
+.door img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex: none; }
+.door span { display: flex; flex-direction: column; min-width: 0; }

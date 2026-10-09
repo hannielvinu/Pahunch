@@ -19,7 +19,7 @@ Repo: github.com/hannielvinu/Pahunch (the Phase 1 prototype is `Pahunch-old`: ne
 - Termux: `bash tools/start.sh` starts llama-server (port 8081) + `python -m http.server 8080`.
   App: Chrome at `http://localhost:8080` (localhost = secure context, so camera/compass/vibration work).
 - `bash tools/get-models.sh [4b]` downloads models into `models/` (gitignored).
-  start.sh prefers `Qwen3-4B-Instruct-2507-Q4_0.gguf`, else `qwen2.5-1.5b-instruct-q4_k_m.gguf`.
+  start.sh prefers `qwen2.5-1.5b-instruct-q4_k_m.gguf` (`MODEL=...` overrides), llama-server `-t 4`.
 - Chrome on this phone: WebGPU ✓ (Adreno 8xx), **no shader-f16** → in-browser models must be q4 (fp32 math), not q4f16.
 - The laptop is weak and crashes under load: it is only a keyboard/screen via Office Kit. Don't plan work on it.
 
@@ -31,8 +31,10 @@ Repo: github.com/hannielvinu/Pahunch (the Phase 1 prototype is `Pahunch-old`: ne
   otherwise the checked AI route is used. Prompt prefix is cached (`cache_prompt`).
 - `js/vision.js`: camera, Tesseract OCR (local files in `lib/`), sign matching (1-edit tolerance), colour thirds.
 - `js/guide.js`: voice prompts en/hi/kn/ta, vibration patterns, compass turn detector.
-- `js/app.js`: screens home → plan → guide → arrive. `js/device.js`: WebGPU/sensor report.
-- Tests: `node tests/parser.test.mjs`, `node tests/llm.test.mjs` (no model needed),
+- `js/digipin.js`: DIGIPIN encode/decode (10 chars stored, `4P3 JK85 2C9` display). `js/doorcard.js`: door cards
+  in localStorage (`pahunch.doors.v1`), photo shrink, GPS fix, QR payload, JSON for the laptop.
+- `js/app.js`: screens home → plan → guide → arrive (door card; saved doors list on home). `js/device.js`: WebGPU/sensor report.
+- Tests: `node tests/parser.test.mjs`, `node tests/llm.test.mjs`, `node tests/doorcard.test.mjs` (no model needed),
   `node tools/eval-llm.mjs` (needs llama-server: accuracy + latency of the real model).
 
 ## Status (Fri 9 Oct, ~23:00)
@@ -42,12 +44,13 @@ llama.cpp in Termux (Qwen2.5-1.5B: 1.7–2.2 s/route with prompt cache, but inac
 LLM go/no-go (Fri 9 Oct, `node tools/eval-llm.mjs`, llama.cpp CPU, 6 threads): Qwen3-4B Q4_0 = 3/7 AI-alone correct,
 mean 5.4 s/route, ~12 tok/s → **no-go**. start.sh defaults to Qwen2.5-1.5B as the cross-check; rule parser stays primary.
 
+Door card (Fri 9 Oct): built, unit-tested in Node; **not yet verified on the phone** (photo, GPS, QR render).
+
 ## Next (in order)
-2. Arrival → door card: stock-camera photo (`<input type=file accept=image/* capture=environment>`), DIGIPIN
-   (implement the public India Post algorithm fresh), floor, route; save in localStorage; QR (qrcode-generator).
+2. Verify the door card on the phone (arrive → photo → DIGIPIN → QR → Send to laptop → Saved doors).
 3. GPS area gate (~150 m, demo toggle). 4. On-device voice input: Whisper tiny via transformers.js (WASM quantized
    or WebGPU q4); models in `finale-assets` / Hugging Face `onnx-community/whisper-tiny`.
-5. Office Kit flows: "Paste from laptop" (done), "Send door card to laptop" (clipboard + JSON download).
+5. Office Kit flows: "Paste from laptop" (done), "Send door card to laptop" (done: clipboard + JSON download).
 6. Network meter (0 B during guidance), latency panel, QR scan-to-load (jsQR).
 
 ## Schedule

@@ -16,7 +16,11 @@ python -m http.server 8080
 Then open `http://localhost:8080` in Chrome (localhost is a secure context, so camera, compass and vibration all work).
 
 ## Tests
-`node tests/parser.test.mjs`
+`node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/doorcard.test.mjs`
 
 ## Third-party (open source, unmodified)
 Tesseract.js 5.1.1 + tesseract.js-core (Apache-2.0), tessdata_fast eng/hin/kan/tam (Apache-2.0).
+qrcode-generator 1.4.4 by Kazuhiko Arase (MIT), in `lib/qrcode/`.
+
+DIGIPIN is India Post's open addressing grid; `js/digipin.js` is written from the public specification and
+checked against India Post's published examples.

@@ -3,6 +3,8 @@ import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
 import { deviceReport, describeDevice } from './device.js';
+import { formatDigipin } from './digipin.js';
+import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -274,16 +276,111 @@ function flash() {
 
 // ---------- Arrive ----------
 function arrive() {
-  const g = state.graph, s = step();
+  const g = state.graph;
   const secs = Math.round((performance.now() - state.startedAt) / 1000);
   say(T().arrived(g.floor), state.lang);
   buzz('arrived');
-  $('#arrived-what').textContent = describe(s).replace(/^Arrive: /, '');
-  $('#arrived-floor').textContent = g.floor != null ? `Floor ${g.floor === 0 ? 'ground' : g.floor}` : '';
-  $('#arrived-time').textContent = `Time to door: ${secs} s`;
+  state.card = makeCard(g, { secs, lang: state.lang });
+  saveCard(state.card);
+  showCard(state.card, true);
+  fixPosition(state.card);
+}
+
+// Door card: saved straight away, then filled in as the GPS fix and the photo arrive.
+function showCard(card, fresh) {
+  state.card = card;
+  $('#tick').hidden = !fresh;
+  $('#arrive-title').textContent = fresh ? "You've arrived" : 'Saved door';
+  $('#del').hidden = fresh;
+  renderCard();
   show('arrive');
 }
+
+function renderCard() {
+  const c = state.card;
+  $('#arrived-what').textContent = c.dest;
+  $('#arrived-floor').textContent = c.floor != null ? `Floor ${c.floor === 0 ? 'ground' : c.floor}` : '';
+  $('#card-pin').textContent = c.digipin ? formatDigipin(c.digipin) : state.locating ? 'locating…' : 'no GPS fix';
+  $('#card-acc').textContent = c.digipin ? `±${c.acc ?? '?'} m · ${c.lat}, ${c.lon}` : '';
+  $('#locate').hidden = !!c.digipin || state.locating;
+  $('#card-photo').hidden = !c.photo;
+  if (c.photo) $('#card-photo').src = c.photo;
+  $('#photo-hint').textContent = c.photo ? 'Retake photo' : '📷 Take a photo of the door';
+  $('#card-route').replaceChildren(...c.route.map((r) => el('li', null, r)));
+  $('#arrived-time').textContent = `${c.secs != null ? `Time to door: ${c.secs} s · ` : ''}${new Date(c.at).toLocaleString()}`;
+  renderQr(qrPayload(c));
+  renderDoors();
+}
+
+function renderQr(data) {
+  const box = $('#card-qr');
+  box.replaceChildren();
+  if (!window.qrcode) return;
+  try {
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; // Hindi / Kannada / Tamil notes
+    const qr = qrcode(0, 'L');
+    qr.addData(data, 'Byte');
+    qr.make();
+    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  } catch (e) {
+    box.append(el('p', 'meta', `QR too big: ${e.message ?? e}`));
+  }
+}
+
+async function fixPosition(card) {
+  state.locating = true;
+  renderCard();
+  const pos = await locate();
+  state.locating = false;
+  if (pos) { setPosition(card, pos); if (loadCards().some((c) => c.id === card.id)) saveCard(card); }
+  else toast('No GPS fix. Step outside and tap Retry GPS.');
+  if (state.card === card) renderCard();
+}
+
+$('#photo-in').onchange = async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f || !state.card) return;
+  try {
+    state.card.photo = await shrinkPhoto(f);
+    if (!saveCard(state.card)) toast('Storage full: photo not saved.');
+    renderCard();
+  } catch (err) { toast(`Photo failed: ${err.message}`); }
+};
+
+$('#locate').onclick = () => fixPosition(state.card);
+
+$('#send').onclick = async () => {
+  const json = cardJson(state.card);
+  let copied = false;
+  try { await navigator.clipboard.writeText(json); copied = true; } catch {}
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `pahunch-door-${state.card.digipin || state.card.id}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast(copied ? 'Door card copied and downloaded as JSON.' : 'Door card downloaded as JSON.');
+};
+
+$('#del').onclick = () => { deleteCard(state.card.id); state.card = null; renderDoors(); show('home'); };
 $('#again').onclick = () => show('home');
+
+function renderDoors() {
+  const cards = loadCards();
+  $('#doors').hidden = !cards.length;
+  $('#doors-sum').textContent = `Saved doors (${cards.length})`;
+  $('#doors-list').replaceChildren(...cards.map((c) => {
+    const li = el('li');
+    const b = el('button', 'door');
+    if (c.photo) { const img = el('img'); img.src = c.photo; img.alt = ''; b.append(img); }
+    const t = el('span');
+    t.append(el('strong', null, c.dest), el('span', 'meta', `${c.digipin ? formatDigipin(c.digipin) : 'no DIGIPIN'}${c.floor != null ? ` · floor ${c.floor}` : ''} · ${new Date(c.at).toLocaleDateString()}`));
+    b.append(t);
+    b.onclick = () => showCard(c, false);
+    li.append(b);
+    return li;
+  }));
+}
 
 // ---------- Misc ----------
 let toastTimer;
@@ -297,6 +394,7 @@ function toast(msg) {
 
 deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
 warmNative();
+renderDoors();
 
 if ('serviceWorker' in navigator && !location.search.includes('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
 show('home');
