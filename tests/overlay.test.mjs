@@ -1,6 +1,7 @@
 // Run: node tests/overlay.test.mjs   (pure parts of the guide overlay: cover mapping, decoy marking)
 import assert from 'node:assert/strict';
 import { coverMap, toScreen, markBoxes } from '../js/overlay.js';
+import { isOffDevice, tally, formatBytes } from '../js/netmeter.js';
 
 let failed = 0;
 const check = (name, fn) => { try { fn(); console.log('ok  ', name); } catch (e) { failed++; console.log('FAIL', name, '\n     ', e.message); } };
@@ -28,6 +29,22 @@ check('only the matched sign is green; decoys stay red', () => {
   ];
   assert.deepEqual(markBoxes(boxes, 'MEDPLUS').map((b) => b.hit), [false, true, false]);
   assert.deepEqual(markBoxes(boxes, null).map((b) => b.hit), [false, false, false]);
+});
+
+check('network meter counts only off-device traffic', () => {
+  assert.equal(isOffDevice('http://localhost:8080/js/app.js'), false);
+  assert.equal(isOffDevice('http://127.0.0.1:8081/completion'), false);
+  assert.equal(isOffDevice('data:image/png;base64,xx'), false);
+  assert.equal(isOffDevice('https://huggingface.co/x.onnx'), true);
+  const t = tally([
+    { name: 'http://localhost:8080/index.html', transferSize: 5000 },
+    { name: 'http://localhost:8081/completion', transferSize: 900 },
+    { name: 'https://cdn.example.com/a.js', transferSize: 2048 },
+    { name: 'https://opaque.example.com/b', transferSize: 0, encodedBodySize: 0 },
+  ]);
+  assert.deepEqual(t, { requests: 2, bytes: 2048 });
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(2048), '2.0 KB');
 });
 
 if (failed) { console.log(`\n${failed} failed`); process.exit(1); }

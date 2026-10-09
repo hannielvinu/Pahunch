@@ -2,6 +2,7 @@ import { SAMPLES, describe } from './parser.js';
 import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
+import { startNetMeter, formatBytes } from './netmeter.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
@@ -402,6 +403,11 @@ function toast(msg) {
   toastTimer = setTimeout(() => (t.hidden = true), 4000);
 }
 
+startNetMeter(({ requests, bytes }) => {
+  const chip = $('#net');
+  chip.classList.toggle('off', requests > 0);
+  chip.textContent = requests ? `⚠ ${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : 'On-device · 0 B sent';
+});
 deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
 warmNative();
 renderDoors();
