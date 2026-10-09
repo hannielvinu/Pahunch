@@ -304,6 +304,11 @@ function showCard(card, fresh) {
   $('#arrive-title').textContent = fresh ? "You've arrived" : 'Saved door';
   $('#del').hidden = fresh;
   renderCard();
+  // Fresh arrival: tick pops with a ring burst, then the door card rises in (CSS, see .celebrate).
+  const scr = $('#arrive');
+  scr.classList.remove('celebrate');
+  void scr.offsetWidth;
+  scr.classList.toggle('celebrate', fresh);
   show('arrive');
 }
 

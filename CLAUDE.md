@@ -33,8 +33,10 @@ Repo: github.com/hannielvinu/Pahunch (the Phase 1 prototype is `Pahunch-old`: ne
 - `js/guide.js`: voice prompts en/hi/kn/ta, vibration patterns, compass turn detector.
 - `js/digipin.js`: DIGIPIN encode/decode (10 chars stored, `4P3 JK85 2C9` display). `js/doorcard.js`: door cards
   in localStorage (`pahunch.doors.v1`), photo shrink, GPS fix, QR payload, JSON for the laptop.
+- `js/overlay.js`: guide canvas over the camera (rAF): OCR boxes (green = step's sign, red = decoy), turn arrow +
+  compass arc 0–90°, colour-third tint. `js/netmeter.js`: off-device bytes/requests via Resource Timing (chip).
 - `js/app.js`: screens home → plan → guide → arrive (door card; saved doors list on home). `js/device.js`: WebGPU/sensor report.
-- Tests: `node tests/parser.test.mjs`, `node tests/llm.test.mjs`, `node tests/doorcard.test.mjs` (no model needed),
+- Tests: `node tests/parser.test.mjs`, `llm.test.mjs`, `doorcard.test.mjs`, `overlay.test.mjs` (no model needed),
   `node tools/eval-llm.mjs` (needs llama-server: accuracy + latency of the real model).
 
 ## Status (Fri 9 Oct, ~23:00)
@@ -45,6 +47,9 @@ LLM go/no-go (Fri 9 Oct, `node tools/eval-llm.mjs`, llama.cpp CPU, 6 threads): Q
 mean 5.4 s/route, ~12 tok/s → **no-go**. start.sh defaults to Qwen2.5-1.5B as the cross-check; rule parser stays primary.
 
 Door card (Fri 9 Oct): built, unit-tested in Node; **not yet verified on the phone** (photo, GPS, QR render).
+
+Guide visuals for Checkpoint 1 (Sat 10 Oct, early): OCR boxes, turn arrow/arc, colour tint, network chip, arrival
+animation. Unit-tested in Node; **not yet seen on the phone** (check box alignment, smoothness, chip stays 0 B).
 
 ## Next (in order)
 2. Verify the door card on the phone (arrive → photo → DIGIPIN → QR → Send to laptop → Saved doors).
