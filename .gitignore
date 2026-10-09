@@ -6,3 +6,4 @@ models/
 *.onnx_data
 node_modules/
 .claude/
+llama.log

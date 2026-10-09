@@ -33,7 +33,21 @@
         <option value="ta">தமிழ்</option>
       </select>
     </div>
+    <div class="row">
+      <label class="label inline" for="engine">Parser</label>
+      <select id="engine">
+        <option value="auto">Auto: on-device AI if running, else rules</option>
+        <option value="native">On-device AI · llama.cpp (Termux)</option>
+        <option value="browser">On-device AI · WebGPU (in Chrome)</option>
+        <option value="rules">Rule parser only (instant)</option>
+      </select>
+    </div>
     <button id="parse" class="btn primary big">Plan route</button>
+    <div id="thinking" class="thinking" hidden>
+      <p id="thinking-status" class="meta"></p>
+      <progress id="thinking-progress" max="1" hidden></progress>
+      <pre id="thinking-out"></pre>
+    </div>
     <details class="device">
       <summary>Device check</summary>
       <pre id="device">checking…</pre>
@@ -43,6 +57,10 @@
   <section id="plan" class="screen" hidden>
     <h2>Route plan</h2>
     <p id="parsed-by" class="meta"></p>
+    <div id="agree" class="agree" hidden>
+      <span id="agree-text"></span>
+      <button id="use-other" class="btn ghost" hidden></button>
+    </div>
     <ol id="steps" class="steps"></ol>
     <p id="floor" class="meta big-meta"></p>
     <div class="row end">

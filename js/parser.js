@@ -36,7 +36,7 @@ for (const [c, words] of Object.entries(COLOUR)) for (const w of W(words)) COLOU
 Object.assign(COLOUR_OF, { नीला: 'blue', नीले: 'blue', लाल: 'red', हरा: 'green', पीला: 'yellow', सफेद: 'white', काला: 'black', ನೀಲಿ: 'blue', ಕೆಂಪು: 'red', ಹಸಿರು: 'green', நீல: 'blue', சிவப்பு: 'red', பச்சை: 'green' });
 
 // Landmark type -> words that name it in speech, and words likely painted on its signboard.
-const LANDMARKS = {
+export const LANDMARKS = {
   temple: ['temple mandir mandira devasthana devasthanam devastana gudi kovil koil मंदिर ದೇವಸ್ಥಾನ ಗುಡಿ கோவில்', 'TEMPLE MANDIR DEVASTHANA KOVIL'],
   mosque: ['masjid mosque', 'MASJID MOSQUE'],
   church: ['church', 'CHURCH'],
@@ -179,7 +179,7 @@ function analyse(clause) {
   return r;
 }
 
-function verifyFor(step) {
+export function verifyFor(step) {
   const lm = step.landmark;
   if (step.kind === 'turn') return { signs: [], alt: [], colour: null, compass: step.turn, confidence: 'medium' };
   const target = lm?.name ? lm : step.ref?.landmark?.name ? step.ref.landmark : lm;

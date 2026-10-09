@@ -1,4 +1,5 @@
-import { parseRules, SAMPLES, describe } from './parser.js';
+import { SAMPLES, describe } from './parser.js';
+import { parseNote } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
 import { deviceReport, describeDevice } from './device.js';
@@ -6,7 +7,7 @@ import { deviceReport, describeDevice } from './device.js';
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-const state = { graph: null, i: 0, lang: 'en', asking: false, askCooldown: 0, signSeenAt: 0, startedAt: 0, running: false };
+const state = { inferences: [], graph: null, i: 0, lang: 'en', asking: false, askCooldown: 0, signSeenAt: 0, startedAt: 0, running: false };
 const vision = new Vision($('#video'));
 const compass = new Compass();
 compass.start();
@@ -40,18 +41,43 @@ $('#paste').onclick = async () => {
   }
 };
 
-$('#parse').onclick = () => {
+$('#parse').onclick = async () => {
   const note = $('#note').value.trim();
   if (!note) return toast('Type, paste or pick a sample first.');
+  vision.loadOcr('eng').catch((e) => toast(`OCR failed to load: ${e.message}`));
+  const btn = $('#parse'), box = $('#thinking'), bar = $('#thinking-progress');
+  btn.disabled = true;
+  box.hidden = false;
+  $('#thinking-out').textContent = '';
   const t0 = performance.now();
-  state.graph = parseRules(note);
+  const res = await parseNote(note, {
+    mode: $('#engine').value,
+    device: state.device,
+    onStatus: (s) => ($('#thinking-status').textContent = s),
+    onToken: (t) => { bar.hidden = true; $('#thinking-status').textContent = 'On-device model is writing the route…'; $('#thinking-out').textContent = t; },
+    onProgress: (p) => { bar.hidden = false; bar.value = p; $('#thinking-status').textContent = `Loading on-device model into the GPU… ${Math.round(p * 100)}%`; },
+  });
+  btn.disabled = false;
+  box.hidden = true;
+  state.parse = res;
+  state.graph = res.graph;
   state.graph.ms = Math.round((performance.now() - t0) * 10) / 10;
   state.graph.note = note;
+  if (res.stats) state.inferences.push({ at: Date.now(), ...res.stats });
+  if (res.fallback && $('#engine').value !== 'auto') toast(`On-device model not used (${res.fallback}). Rule parser took over.`);
   const pick = $('#voice').value;
   state.lang = pick === 'auto' ? state.graph.lang : pick;
   renderPlan();
   show('plan');
-  vision.loadOcr('eng').catch((e) => toast(`OCR failed to load: ${e.message}`));
+};
+
+$('#use-other').onclick = () => {
+  const p = state.parse;
+  const other = state.graph.parser === 'llm' ? p.rules : p.llmGraph;
+  if (state.graph.parser === 'llm') p.llmGraph = state.graph;
+  Object.assign(other, { note: state.graph.note, ms: state.graph.ms });
+  state.graph = other;
+  renderPlan();
 };
 
 // ---------- Plan ----------
@@ -66,8 +92,18 @@ function chips(step) {
 }
 
 function renderPlan() {
-  const g = state.graph;
-  $('#parsed-by').textContent = `Parsed by: ${g.parser === 'rules' ? 'rule parser' : g.parser} · ${g.ms} ms · language: ${g.lang}`;
+  const g = state.graph, p = state.parse || {}, st = p.stats;
+  $('#parsed-by').textContent = g.parser === 'llm' && st
+    ? `Parsed on this phone by ${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s · language: ${g.lang}`
+    : `Parsed by: rule parser · ${g.ms} ms · language: ${g.lang}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ''}`;
+  const showAgree = !!(p.rules && st);
+  $('#agree').hidden = !showAgree;
+  if (showAgree) {
+    $('#agree').className = `agree ${p.agree ? 'ok' : 'warn'}`;
+    $('#agree-text').textContent = p.agree ? '✓ Rule parser reads the same route' : '⚠ Rule parser reads it differently';
+    $('#use-other').hidden = p.agree;
+    $('#use-other').textContent = g.parser === 'llm' ? 'Use rule parser' : 'Use AI result';
+  }
   const list = $('#steps');
   list.replaceChildren();
   for (const s of g.steps) {
