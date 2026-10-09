@@ -154,10 +154,12 @@ function announce() {
   $('#step-line').textContent = describe(s);
   $('#seen').replaceChildren();
   $('#colour-bars').hidden = !s.verify.colour;
+  overlay.clearStep();
   if (s.kind === 'turn') {
     say(T().turn(s.ordinal, T()[s.turn]), state.lang);
     buzz(s.turn);
     state.turn = new TurnDetector(compass, s.turn, () => confirmStep(T().turned));
+    overlay.setTurn(state.turn);
   } else {
     state.turn = null;
     say(T().look(spokenName(s.landmark)), state.lang);
@@ -168,6 +170,7 @@ function confirmStep(line) {
   const s = step();
   if (s.kind === 'arrive') return arrive();
   if (line) say(line, state.lang);
+  if (s.kind === 'turn') overlay.turnDone = true;
   buzz('spotted');
   flash();
   state.i++;
