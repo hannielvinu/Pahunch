@@ -1,0 +1,8 @@
+# Model weights are copied to the phone separately (Office Kit file transfer), not committed.
+models/
+*.task
+*.gguf
+*.onnx
+*.onnx_data
+node_modules/
+.claude/
