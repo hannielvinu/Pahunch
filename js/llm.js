@@ -60,17 +60,35 @@ function landmark(type, name, colour, note) {
   return { type, name: grounded(dash(name), note), colour: COLOURS.has(colour) ? colour : null };
 }
 
+const MAX_STEPS = 10;
+const empty = (lm) => !lm || (lm.type === 'other' && !lm.name && !lm.colour);
+
+// Small models sometimes loop on one line; stop reading at the first repeat.
+export function looping(out) {
+  const lines = out.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.length > MAX_STEPS + 1 || lines.some((l, i) => i > 0 && l === lines[i - 1]);
+}
+
 export function parseLines(out, note) {
   const g = { floor: null, steps: [] };
   const bad = [];
+  const seen = new Set();
+  let looped = false;
   for (const raw of out.split('\n')) {
     const line = raw.trim().replace(/^[-*\d.)\s]+(?=[A-Z])/, '');
     if (!line) continue;
+    if (seen.has(line)) { looped = true; break; } // the model is looping; keep what came before
+    seen.add(line);
     const [head, ...rest] = line.split(/\s+/);
     const body = rest.join(' ');
     const f = body.split('|');
     switch (head.toUpperCase()) {
-      case 'PASS': g.steps.push({ kind: 'pass', landmark: landmark(f[0].trim().split(/\s+/)[0], f[1], f[2], note) }); break;
+      case 'PASS': {
+        const lm = landmark(f[0].trim().split(/\s+/)[0], f[1], f[2], note);
+        if (empty(lm)) bad.push(line); // "PASS other | - | -" carries nothing the camera could check
+        else g.steps.push({ kind: 'pass', landmark: lm });
+        break;
+      }
       case 'TURN': {
         const [dir, ord, road] = body.toLowerCase().split(/\s+/);
         if (dir !== 'left' && dir !== 'right') { bad.push(line); break; }
@@ -82,15 +100,16 @@ export function parseLines(out, note) {
         const lm = landmark(f[0]?.trim(), f[1], f[2], note);
         const [rel, refType] = (f[3] || '').trim().toLowerCase().split(/\s+/);
         const ref = RELATIONS.has(rel) && dash(refType) ? { relation: rel, landmark: landmark(refType, f[4], null, note) } : null;
-        g.steps.push({ kind: 'arrive', landmark: lm.type === 'other' && !lm.name && !lm.colour ? null : lm, ref });
+        g.steps.push({ kind: 'arrive', landmark: empty(lm) ? null : lm, ref });
         break;
       }
       case 'FLOOR': { const n = parseInt(body, 10); if (Number.isFinite(n) && n >= 0 && n < 100) g.floor = n; break; }
       default: bad.push(line);
     }
   }
-  if (!g.steps.length) throw new Error('model returned no steps');
-  if (bad.length > 1) throw new Error(`model went off-format: ${bad[0]}`);
+  if (bad.length > 1 || (looped && bad.length)) throw new Error(`model went off-format: ${bad[0]}`);
+  if (g.steps.length > MAX_STEPS) throw new Error(`model returned ${g.steps.length} steps`);
+  if (!g.steps.some((s) => s.kind === 'turn' || !empty(s.landmark) || s.ref)) throw new Error('model found no landmarks or turns');
   const last = g.steps.at(-1);
   if (last.kind === 'turn') g.steps.push({ kind: 'arrive', landmark: null, ref: null });
   else last.kind = 'arrive';
@@ -113,18 +132,52 @@ async function nativeUp() {
   } catch { return false; }
 }
 
+// cache_prompt keeps the system prompt + examples in llama.cpp's KV cache, so after the first call
+// only the customer's note has to be read.
+const nativeBody = (note, extra) => JSON.stringify({ messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
+
+// Fill the prompt cache in the background so the first real request is fast.
+export async function warmNative() {
+  if (!(await nativeUp())) return false;
+  fetch(`${NATIVE_URL}/v1/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: nativeBody('go straight', { max_tokens: 1 }) }).catch(() => {});
+  return true;
+}
+
 async function runNative(note, onToken) {
   const t0 = performance.now();
+  const ctrl = new AbortController();
   const r = await fetch(`${NATIVE_URL}/v1/chat/completions`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: messages(note), temperature: 0, max_tokens: 200, stream: false }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+    body: nativeBody(note, { stream: true, stream_options: { include_usage: true } }),
   });
   if (!r.ok) throw new Error(`llama-server ${r.status}`);
-  const j = await r.json();
-  const out = j.choices?.[0]?.message?.content ?? '';
-  onToken?.(out);
+  // Server-sent events: one JSON chunk per token; the last chunks carry usage and timings.
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '', out = '', usage = {}, timings = {}, model, first = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const events = buf.split('\n\n');
+      buf = events.pop();
+      for (const ev of events) {
+        const data = ev.replace(/^data: ?/, '').trim();
+        if (!data || data === '[DONE]') continue;
+        const j = JSON.parse(data);
+        model ??= j.model;
+        if (j.usage) usage = j.usage;
+        if (j.timings) timings = j.timings;
+        const t = j.choices?.[0]?.delta?.content;
+        if (t) { first ||= performance.now(); out += t; onToken?.(out); }
+      }
+      if (looping(out)) { ctrl.abort(); break; }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') throw e;
+  }
   const ms = Math.round(performance.now() - t0);
-  return { out, ms, tokensIn: j.usage?.prompt_tokens, tokensOut: j.usage?.completion_tokens, tps: j.timings?.predicted_per_second, prefillTps: j.timings?.prompt_per_second, model: j.model || 'Qwen2.5-1.5B GGUF', backend: 'llama.cpp (native, Termux)' };
+  return { out, ms, tokensIn: usage.prompt_tokens, tokensOut: usage.completion_tokens, cached: timings.cache_n, tps: timings.predicted_per_second, prefillTps: timings.prompt_per_second, model: model || 'Qwen2.5-1.5B GGUF', backend: 'llama.cpp (native, Termux)' };
 }
 
 let tf = null, browser = null;
@@ -157,7 +210,7 @@ async function runBrowser(note, onToken, device, onProgress) {
   let text = '', first = 0, n = 0;
   const streamer = new tf.TextStreamer(tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: (t) => { first ||= performance.now(); n++; text += t; onToken?.(text); } });
   const t0 = performance.now();
-  const ids = await model.generate({ ...inputs, max_new_tokens: 200, do_sample: false, streamer });
+  const ids = await model.generate({ ...inputs, max_new_tokens: 120, do_sample: false, streamer });
   const ms = Math.round(performance.now() - t0);
   const outIds = ids.slice(null, [tokensIn, null]);
   const out = tokenizer.batch_decode(outIds, { skip_special_tokens: true })[0];
@@ -177,15 +230,16 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   let backend = mode;
   if (mode === 'auto') backend = (await nativeUp()) ? 'native' : device?.webgpu && (await hasBrowserModel()) ? 'browser' : null;
   if (!backend) return { graph: rules, stats: null, fallback: 'no on-device model running' };
+  let stats = null;
   try {
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
-    const stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
+    stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
     const g = parseLines(stats.out, note);
     Object.assign(g, { lang: rules.lang, parser: 'llm', floor: g.floor ?? rules.floor });
     return { graph: g, llmGraph: g, stats, rules, agree: agrees(g, rules) };
   } catch (e) {
     console.warn('LLM parse failed, using rules', e);
-    return { graph: rules, stats: null, fallback: e.message };
+    return { graph: rules, stats, fallback: e.message }; // stats kept so the raw output can be inspected
   }
 }
 

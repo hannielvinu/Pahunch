@@ -1,6 +1,6 @@
 // Run: node tests/llm.test.mjs   (checks the strict output reader, no model needed)
 import assert from 'node:assert/strict';
-import { parseLines, agrees } from '../js/llm.js';
+import { parseLines, agrees, looping } from '../js/llm.js';
 import { parseRules, SAMPLES, describe } from '../js/parser.js';
 
 let failed = 0;
@@ -26,7 +26,7 @@ check('keeps names that differ by a letter (Ganesh/Ganesha)', () => {
 });
 
 check('tolerates bullets / numbering and unknown types', () => {
-  const g = parseLines('1. PASS fountain | - | -\n- TURN right 9 road\nARRIVE door | - | - | - - | -', 'past the fountain, right, the door');
+  const g = parseLines('1. PASS fountain | Neptune | -\n- TURN right 9 road\nARRIVE door | - | - | - - | -', 'past the Neptune fountain, right, the door');
   assert.equal(g.steps[0].landmark.type, 'other');
   assert.equal(g.steps[1].ordinal, 4);
   assert.equal(g.steps.at(-1).kind, 'arrive');
@@ -39,5 +39,17 @@ check('rejects chatty / off-format output', () => {
 check('trailing turn gets a destination step', () => {
   const g = parseLines('TURN left 1 lane', 'first left');
   assert.equal(g.steps.length, 2); assert.equal(g.steps[1].kind, 'arrive');
+});
+
+check("a looping answer is detected and rejected if it went off-track", () => {
+  const loop = 'PASS temple | Ganesh | -\n' + 'PASS other | - | -\n'.repeat(30);
+  assert.ok(looping(loop));
+  assert.throws(() => parseLines(loop, SAMPLES.hi));
+  const g = parseLines('PASS temple | Ganesh | -\nTURN left 2 lane\nTURN left 2 lane\nTURN left 2 lane', SAMPLES.hi);
+  assert.equal(g.steps.length, 3);
+});
+
+check("all-empty answer falls back", () => {
+  assert.throws(() => parseLines("ARRIVE other | - | - | - - | -", "hello"));
 });
 process.exit(failed ? 1 : 0);

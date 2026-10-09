@@ -1,5 +1,5 @@
 import { SAMPLES, describe } from './parser.js';
-import { parseNote } from './llm.js';
+import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
 import { deviceReport, describeDevice } from './device.js';
@@ -95,7 +95,9 @@ function renderPlan() {
   const g = state.graph, p = state.parse || {}, st = p.stats;
   $('#parsed-by').textContent = g.parser === 'llm' && st
     ? `Parsed on this phone by ${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s · language: ${g.lang}`
-    : `Parsed by: rule parser · ${g.ms} ms · language: ${g.lang}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ''}`;
+    : `Parsed by: rule parser · ${st ? "instant" : `${g.ms} ms`} · language: ${g.lang}${st ? ` · AI took ${(st.ms / 1000).toFixed(1)} s` : ""}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ""}`;
+  $('#raw').hidden = !st;
+  if (st) $('#raw-out').textContent = `Note: ${g.note}\n\n${st.out || '(empty)'}\n\n${st.tokensIn ?? '?'} prompt tokens (${st.cached ?? 0} from cache) · ${st.tokensOut ?? '?'} generated · ${(st.ms / 1000).toFixed(1)} s`;
   const showAgree = !!(p.rules && st);
   $('#agree').hidden = !showAgree;
   if (showAgree) {
@@ -286,6 +288,7 @@ function toast(msg) {
 }
 
 deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
+warmNative();
 
 if ('serviceWorker' in navigator && !location.search.includes('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
 show('home');
