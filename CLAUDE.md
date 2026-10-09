@@ -39,8 +39,10 @@ Repo: github.com/hannielvinu/Pahunch (the Phase 1 prototype is `Pahunch-old`: ne
 Done and verified on the phone: parser (4 samples), camera + OCR on real signs, compass turn, Hindi voice, vibration,
 llama.cpp in Termux (Qwen2.5-1.5B: 1.7–2.2 s/route with prompt cache, but inaccurate alone, hence the grounding).
 
+LLM go/no-go (Fri 9 Oct, `node tools/eval-llm.mjs`, llama.cpp CPU, 6 threads): Qwen3-4B Q4_0 = 3/7 AI-alone correct,
+mean 5.4 s/route, ~12 tok/s → **no-go**. start.sh defaults to Qwen2.5-1.5B as the cross-check; rule parser stays primary.
+
 ## Next (in order)
-1. Evaluate Qwen3-4B with `node tools/eval-llm.mjs`. Go if ≥ 6/7 correct and < 5 s per route, else keep 1.5B as cross-check.
 2. Arrival → door card: stock-camera photo (`<input type=file accept=image/* capture=environment>`), DIGIPIN
    (implement the public India Post algorithm fresh), floor, route; save in localStorage; QR (qrcode-generator).
 3. GPS area gate (~150 m, demo toggle). 4. On-device voice input: Whisper tiny via transformers.js (WASM quantized

@@ -4,10 +4,11 @@
 # Then open http://localhost:8080 in Chrome. Ctrl+C stops both.
 cd "$(dirname "$0")/.."
 termux-wake-lock 2>/dev/null
-# Prefer the more accurate 4B model when it has been downloaded; MODEL=... overrides.
+# Default: Qwen2.5-1.5B as the cross-check (Qwen3-4B measured 3/7 at 5.4 s/route on this phone: no-go).
+# MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf bash tools/start.sh  to try the 4B model.
 if [ -z "${MODEL:-}" ]; then
-  MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf
-  [ -f "$MODEL" ] || MODEL=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
+  MODEL=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
+  [ -f "$MODEL" ] || MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf
 fi
 echo "Model: $MODEL"
 
