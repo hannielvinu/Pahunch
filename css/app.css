@@ -67,3 +67,6 @@ select { width: auto; flex: 1; }
 .arrive { align-items: center; justify-content: center; text-align: center; }
 .tick { width: 120px; height: 120px; border-radius: 50%; background: var(--ok); color: #031; font-size: 72px; display: grid; place-items: center; font-weight: 900; }
 .toast { position: fixed; left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); background: #222a; backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; z-index: 9; }
+.device { color: var(--dim); font-size: 13px; margin-top: 8px; }
+.device summary { cursor: pointer; }
+.device pre { white-space: pre-wrap; margin: 8px 0 0; font: 13px/1.5 ui-monospace, monospace; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }

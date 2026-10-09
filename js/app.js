@@ -1,6 +1,7 @@
 import { parseRules, SAMPLES, describe } from './parser.js';
 import { Vision, matchSigns } from './vision.js';
 import { say, text, buzz, Compass, TurnDetector } from './guide.js';
+import { deviceReport, describeDevice } from './device.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -247,6 +248,8 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.hidden = true), 4000);
 }
+
+deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
 
 if ('serviceWorker' in navigator && !location.search.includes('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
 show('home');
