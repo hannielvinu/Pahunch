@@ -10,7 +10,7 @@ Built from scratch during the iQOO Hackathon 2026 Grand Finale (Mobility track),
 ## Run on the phone
 ```
 pkg install git python
-git clone https://github.com/hannielvinu/pahunch-finale && cd pahunch-finale
+git clone https://github.com/hannielvinu/Pahunch && cd Pahunch
 python -m http.server 8080
 ```
 Then open `http://localhost:8080` in Chrome (localhost is a secure context, so camera, compass and vibration all work).
