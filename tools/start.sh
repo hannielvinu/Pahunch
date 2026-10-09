@@ -4,7 +4,12 @@
 # Then open http://localhost:8080 in Chrome. Ctrl+C stops both.
 cd "$(dirname "$0")/.."
 termux-wake-lock 2>/dev/null
-MODEL=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
+# Prefer the more accurate 4B model when it has been downloaded; MODEL=... overrides.
+if [ -z "${MODEL:-}" ]; then
+  MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf
+  [ -f "$MODEL" ] || MODEL=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
+fi
+echo "Model: $MODEL"
 
 if [ -f "$MODEL" ] && command -v llama-server >/dev/null; then
   pkill -f llama-server 2>/dev/null

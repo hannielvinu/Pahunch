@@ -31,7 +31,7 @@ const COLOUR = {
   yellow: 'yellow peela peeli pila haladi manjal', white: 'white safed safedh bili bilee vellai', black: 'black kaala kala kaali kappu karuppu',
   orange: 'orange narangi kesari', pink: 'pink gulabi', brown: 'brown bhura kandu', grey: 'grey gray',
 };
-const COLOUR_OF = {};
+export const COLOUR_OF = {};
 for (const [c, words] of Object.entries(COLOUR)) for (const w of W(words)) COLOUR_OF[w] = c;
 Object.assign(COLOUR_OF, { नीला: 'blue', नीले: 'blue', लाल: 'red', हरा: 'green', पीला: 'yellow', सफेद: 'white', काला: 'black', ನೀಲಿ: 'blue', ಕೆಂಪು: 'red', ಹಸಿರು: 'green', நீல: 'blue', சிவப்பு: 'red', பச்சை: 'green' });
 
@@ -55,18 +55,21 @@ export const LANDMARKS = {
   door: ['door', ''],
   house: ['house ghar mane veedu', ''],
   // Generic signage, useful indoors (venue, malls, offices).
-  sign: ['sign board signboard banner poster', ''],
+  sign: ['sign board signboard banner poster text written likha', ''],
   desk: ['desk counter booth stall', ''],
   stage: ['stage', 'STAGE'], exit: ['exit', 'EXIT'], entrance: ['entrance entry', 'ENTRANCE ENTRY'],
   lift: ['lift elevator', 'LIFT'], stairs: ['stairs staircase steps', 'STAIRS'],
   tree: ['tree ped mara maram', ''],
 };
-const TYPE_OF = {};
+export const TYPE_OF = {};
 for (const [t, [spoken]] of Object.entries(LANDMARKS)) for (const w of W(spoken)) TYPE_OF[w] = t;
-const BRANDS = { medplus: ['pharmacy', 'MedPlus'], apollo: ['pharmacy', 'Apollo'], dmart: ['store', 'DMart'], reliance: ['store', 'Reliance'], bigbazaar: ['store', 'Big Bazaar'], iqoo: ['sign', 'iQOO'], vivo: ['sign', 'vivo'], hp: ['petrol', 'HP'], kfc: ['restaurant', 'KFC'], dominos: ['restaurant', 'Dominos'] };
+export const BRANDS = { medplus: ['pharmacy', 'MedPlus'], apollo: ['pharmacy', 'Apollo'], dmart: ['store', 'DMart'], reliance: ['store', 'Reliance'], bigbazaar: ['store', 'Big Bazaar'], iqoo: ['sign', 'iQOO'], vivo: ['sign', 'vivo'], hp: ['petrol', 'HP'], kfc: ['restaurant', 'KFC'], dominos: ['restaurant', 'Dominos'] };
 
+const WALA = set('wala wali wale waala waali waale with');
 const HONORIFIC = set('sri shri shree sree');
-const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road');
+const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road see look find dekho dekhiye dekh nodi paaru paarunga area place');
+// Generic words that are never a landmark's proper name.
+export const GENERIC = set('main road cross street lane gali area place side corner medical shop store building the');
 const SPLIT = /[.,;!?\n।]+|\b(?:then|and then|after that|uske baad|iske baad|phir|fir|amele|aamele|aamel|appuram|apparam|apram|piragu|aprm)\b/i;
 
 const LANG_HINTS = {
@@ -135,6 +138,12 @@ function findLandmarks(toks) {
       found.push({ i: found.length && TYPE_OF[toks[i - 1]?.w] === type ? found.pop().i : i, end: i, type, name: null });
     }
   }
+  // "green gate wala ghar" = the house with the green gate: one place; the gate is what the camera can check.
+  for (let k = found.length - 1; k > 0; k--) {
+    const a = found[k - 1], b = found[k];
+    const between = toks.slice(a.end + 1, b.i).map((t) => t.w);
+    if (between.length && between.every((w) => WALA.has(w))) { a.end = b.end; found.splice(k, 1); }
+  }
   for (const lm of found) {
     if (!lm.name) lm.name = nameBefore(toks, lm.i);
     for (let j = lm.i - 1; j >= Math.max(0, lm.i - 4); j--) {
@@ -179,6 +188,11 @@ function analyse(clause) {
   return r;
 }
 
+// Does the note mention any relation word (opposite, saamne, bagal…)?
+export function mentionsRelation(note) {
+  return tokens(normalise(note)).some((t) => t.w in REL_PRE || t.w in REL_POST);
+}
+
 export function verifyFor(step) {
   const lm = step.landmark;
   if (step.kind === 'turn') return { signs: [], alt: [], colour: null, compass: step.turn, confidence: 'medium' };
@@ -203,11 +217,22 @@ export function parseRules(input) {
     if (a.turn) {
       // "Ganesh mandir ke baad doosri gali mein baayen" -> pass the temple, then turn.
       const turnAt = a.toks.findIndex((t) => LEFT.has(t.w) || RIGHT.has(t.w));
-      for (const lm of lms) if (lm.i < turnAt || a.passAt >= 0) push({ kind: 'pass', landmark: landmarkOut(lm) });
+      const before = lms.filter((lm) => lm.i < turnAt || (a.passAt >= 0 && a.passAt > turnAt && lm.i < a.passAt));
+      for (const lm of before) push({ kind: 'pass', landmark: landmarkOut(lm) });
       push({ kind: 'turn', turn: a.turn, ordinal: a.ordinal || 1, road: a.road });
+      // "turn right, see the Remote PC text": landmarks after the turn come after it.
+      for (const lm of lms) if (!before.includes(lm)) push({ kind: 'pass', landmark: landmarkOut(lm) });
       continue;
     }
     if (!lms.length) continue; // "go straight from the main road", floor-only clauses, filler
+
+    // ", SBI bank ke bagal mein": a relation-only clause describes the place just named.
+    const prev = graph.steps.at(-1);
+    if (a.rel && lms.length === 1 && prev && prev.kind !== 'turn' && !prev.ref) {
+      prev.kind = 'arrive';
+      prev.ref = { relation: a.rel.relation, landmark: landmarkOut(lms[0]) };
+      continue;
+    }
 
     if (a.rel && lms.length >= 2) {
       const before = lms.filter((l) => l.end < a.rel.at), after = lms.filter((l) => l.i > a.rel.at);

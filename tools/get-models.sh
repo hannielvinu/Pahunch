@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Run in Termux on the phone, from the repo folder:  bash tools/get-models.sh [browser]
+# Run in Termux on the phone, from the repo folder:  bash tools/get-models.sh [4b|browser]
+#   4b      : Qwen3-4B-Instruct-2507 GGUF Q4_0 (2.4 GB), more accurate; used automatically when present
 # Downloads open-source models straight onto the phone (resumable). Re-run safely if Wi-Fi drops.
 #   default : Qwen2.5-1.5B-Instruct GGUF Q4_K_M (1.1 GB) for llama.cpp  -> models/gguf/
 #   browser : also Qwen2.5-1.5B-Instruct ONNX q4 (1.8 GB) for WebGPU in Chrome -> models/Qwen2.5-1.5B-Instruct/
@@ -11,6 +12,14 @@ get() { # url out
   echo "-> $2"
   until curl -fL --retry 10 --retry-delay 5 -C - -o "$2" "$1"; do echo "retrying in 5 s…"; sleep 5; done
 }
+
+if [ "${1:-}" = "4b" ]; then
+  # Qwen3-4B-Instruct-2507 (Apache-2.0), Q4_0: the format llama.cpp repacks for fast ARM matmuls. 2.4 GB.
+  get "$HF/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_0.gguf" models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf
+  ls -la models/gguf
+  echo "Done. Restart with: bash tools/start.sh   (it picks the 4B model automatically)"
+  exit 0
+fi
 
 get "$HF/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf" models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
 

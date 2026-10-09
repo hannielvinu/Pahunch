@@ -98,16 +98,19 @@ function chips(step) {
 
 function renderPlan() {
   const g = state.graph, p = state.parse || {}, st = p.stats;
+  const ai = st ? `${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s` : '';
   $('#parsed-by').textContent = g.parser === 'llm' && st
-    ? `Parsed on this phone by ${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s · language: ${g.lang}`
-    : `Parsed by: rule parser · ${st ? "instant" : `${g.ms} ms`} · language: ${g.lang}${st ? ` · AI took ${(st.ms / 1000).toFixed(1)} s` : ""}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ""}`;
+    ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
+    : st && !p.fallback
+      ? `Route by rule parser (instant), cross-checked on this phone by ${ai} · language: ${g.lang}`
+      : `Parsed by: rule parser · ${g.ms} ms · language: ${g.lang}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ''}`;
   $('#raw').hidden = !st;
   if (st) $('#raw-out').textContent = `Note: ${g.note}\n\n${st.out || '(empty)'}\n\n${st.tokensIn ?? '?'} prompt tokens (${st.cached ?? 0} from cache) · ${st.tokensOut ?? '?'} generated · ${(st.ms / 1000).toFixed(1)} s`;
   const showAgree = !!(p.rules && st);
   $('#agree').hidden = !showAgree;
   if (showAgree) {
     $('#agree').className = `agree ${p.agree ? 'ok' : 'warn'}`;
-    $('#agree-text').textContent = p.agree ? '✓ Rule parser reads the same route' : '⚠ Rule parser reads it differently';
+    $('#agree-text').textContent = p.agree ? '✓ AI and rule parser read the same route' : '⚠ AI and rule parser differ: check the steps';
     $('#use-other').hidden = p.agree;
     $('#use-other').textContent = g.parser === 'llm' ? 'Use rule parser' : 'Use AI result';
   }

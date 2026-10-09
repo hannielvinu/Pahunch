@@ -3,8 +3,11 @@
 //   browser - transformers.js on WebGPU, model files served from ./models/
 // The model answers in a few short lines (cheap to generate, easy to validate); anything off-format
 // falls back to the rule parser, and landmark names not present in the customer's note are dropped.
+// Facts a small model tends to get wrong (turn direction, ordinal, floor, relation) are checked against
+// the words in the note; when the rule parser already reads a complete route, its route is used and the
+// model acts as a cross-check.
 
-import { LANDMARKS, verifyFor, parseRules, describe } from './parser.js';
+import { LANDMARKS, verifyFor, parseRules, describe, COLOUR_OF, TYPE_OF, BRANDS, GENERIC, mentionsRelation } from './parser.js';
 
 const NATIVE_URL = 'http://localhost:8081';
 const BROWSER_MODEL = 'Qwen2.5-1.5B-Instruct';
@@ -53,11 +56,22 @@ function grounded(name, note) {
   return ok ? name : null;
 }
 
+// Map whatever word the model used for a type onto ours ("medical" -> pharmacy, "MedPlus" -> pharmacy).
+function typeOf(word) {
+  const w = (dash(word) || '').toLowerCase().replace(/\s+/g, '_');
+  if (TYPES.has(w)) return w;
+  return TYPE_OF[w] || BRANDS[w]?.[0] || null;
+}
+
+function cleanName(name, note) {
+  const n = grounded(dash(name), note);
+  return n && !n.toLowerCase().split(/\s+/).every((w) => GENERIC.has(w)) ? n : null;
+}
+
 function landmark(type, name, colour, note) {
-  type = (dash(type) || 'other').toLowerCase().replace(/\s+/g, '_');
-  if (!TYPES.has(type)) type = 'other';
-  colour = dash(colour)?.toLowerCase() ?? null;
-  return { type, name: grounded(dash(name), note), colour: COLOURS.has(colour) ? colour : null };
+  const c = dash(colour)?.toLowerCase() ?? null;
+  const mapped = COLOUR_OF[c] || c;
+  return { type: typeOf(type) || 'other', name: cleanName(name, note), colour: COLOURS.has(mapped) ? mapped : null };
 }
 
 const MAX_STEPS = 10;
@@ -98,8 +112,15 @@ export function parseLines(out, note) {
       }
       case 'ARRIVE': {
         const lm = landmark(f[0]?.trim(), f[1], f[2], note);
-        const [rel, refType] = (f[3] || '').trim().toLowerCase().split(/\s+/);
-        const ref = RELATIONS.has(rel) && dash(refType) ? { relation: rel, landmark: landmark(refType, f[4], null, note) } : null;
+        // "opposite pharmacy | MedPlus" is the format; also accept "next_to MedPlus | Medical".
+        // A relation the note never mentions is dropped.
+        const [rel, refWord] = (f[3] || '').trim().split(/\s+/);
+        let ref = null;
+        if (RELATIONS.has(rel?.toLowerCase()) && dash(refWord) && mentionsRelation(note)) {
+          const brand = BRANDS[refWord.toLowerCase()];
+          const lm = brand ? landmark(brand[0], brand[1], null, note) : landmark(typeOf(refWord) || typeOf(f[4]), typeOf(refWord) ? f[4] : refWord, null, note);
+          ref = { relation: rel.toLowerCase(), landmark: lm };
+        }
         g.steps.push({ kind: 'arrive', landmark: empty(lm) ? null : lm, ref });
         break;
       }
@@ -116,6 +137,29 @@ export function parseLines(out, note) {
   g.steps.forEach((s, i) => { if (s.kind === 'arrive' && i < g.steps.length - 1) s.kind = 'pass'; s.n = i + 1; s.verify = verifyFor(s); });
   return g;
 }
+
+// Replace what the model guessed with what the note actually says: turn directions and ordinals come
+// from the rule parser's reading of the turn words; the floor only if a floor word is present.
+export function ground(g, rules) {
+  const ruleTurns = rules.steps.filter((s) => s.kind === 'turn');
+  let k = 0;
+  const steps = [];
+  for (const s of g.steps) {
+    if (s.kind !== 'turn') { steps.push(s); continue; }
+    if (k < ruleTurns.length) { const r = ruleTurns[k++]; steps.push({ ...s, turn: r.turn, ordinal: r.ordinal, road: r.road ?? s.road }); }
+    // a turn the note has no word for is dropped
+  }
+  while (k < ruleTurns.length) steps.splice(Math.max(0, steps.length - 1), 0, { ...ruleTurns[k++] });
+  // The relation word (opposite / next to) is also read from the note when the rules found one.
+  const rRef = rules.steps.at(-1)?.ref, last = steps.at(-1);
+  if (rRef && last?.ref) last.ref = { ...last.ref, relation: rRef.relation };
+  const out = { ...g, floor: rules.floor, steps };
+  out.steps.forEach((s, i) => { s.n = i + 1; s.verify = verifyFor(s); });
+  return out;
+}
+
+// The rule parser read every step: a known destination, and every step is a turn or has a landmark.
+export const complete = (rules) => !!rules.steps.at(-1)?.landmark && rules.steps.every((s) => s.kind === 'turn' || s.landmark);
 
 // Same route? Compare step kinds, turn directions/ordinals and landmark types.
 export function agrees(a, b) {
@@ -237,9 +281,10 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   try {
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
     stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
-    const g = parseLines(stats.out, note);
-    Object.assign(g, { lang: rules.lang, parser: 'llm', floor: g.floor ?? rules.floor });
-    return { graph: g, llmGraph: g, stats, rules, agree: agrees(g, rules) };
+    const g = ground(parseLines(stats.out, note), rules);
+    Object.assign(g, { lang: rules.lang, parser: 'llm' });
+    // Rules are exact on the words they know; the model covers what they miss.
+    return { graph: complete(rules) ? rules : g, llmGraph: g, stats, rules, agree: agrees(g, rules) };
   } catch (e) {
     console.warn('LLM parse failed, using rules', e);
     return { graph: rules, stats, fallback: e.message }; // stats kept so the raw output can be inspected
