@@ -7,6 +7,7 @@ models/
 node_modules/
 .claude/
 llama.log
+http.log
 whisper.log
 whisper-live.log
 lunch-setup.log

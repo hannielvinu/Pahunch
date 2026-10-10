@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Run in Termux on the phone, from the repo folder:  bash tools/start.sh
+# Run in Termux on the phone, from the repo folder:  bash tools/start.sh   (or --bg to run in the background)
 # Starts the on-device LLM (llama.cpp server, port 8081) in the background and the app server (port 8080).
 # Then open http://localhost:8080 in Chrome. Ctrl+C stops both.
 cd "$(dirname "$0")/.."
@@ -70,6 +70,12 @@ else
 fi
 
 pkill -f "http.server 8080" 2>/dev/null
+if [ "${1:-}" = "--bg" ]; then
+  # Background mode: everything keeps running after this script returns (stop with: bash tools/stop.sh)
+  nohup python -m http.server 8080 > http.log 2>&1 &
+  echo "App: http://localhost:8080  (all servers running in the background; stop with: bash tools/stop.sh)"
+  exit 0
+fi
 trap 'kill $LLAMA $WHISPER $WHISPER_LIVE 2>/dev/null' EXIT
-echo "App: http://localhost:8080"
+echo "App: http://localhost:8080  (Ctrl+C here stops ALL servers; use another Termux session for other commands)"
 python -m http.server 8080
