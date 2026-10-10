@@ -16,18 +16,23 @@ jobs:
       image: ghcr.io/snapdragon-toolchain/arm64-android:v0.7
       options: --user root
     steps:
-      - name: Build llama.cpp (CPU + Hexagon NPU), server and bench only
+      - name: Build llama.cpp (CPU + Hexagon NPU) and install the package
         run: |
           git clone --depth 1 https://github.com/ggml-org/llama.cpp /src && cd /src
           git log -1 --format='llama.cpp %h %cs' | tee /tmp/version.txt
           cp docs/backend/snapdragon/CMakeUserPresets.json .
           cmake --preset arm64-android-snapdragon-release -B build -DLLAMA_CURL=OFF -DGGML_OPENCL=OFF
-          cmake --build build -j 4 --target llama-server llama-bench
+          # Full build: the NPU-side kernels (libggml-htp-v73..v81) are separate sub-builds that a targeted build skips.
+          cmake --build build -j 4
+          cmake --install build --prefix /pkg
           mkdir -p /out/llama-npu/bin /out/llama-npu/lib
-          cp build/bin/llama-server build/bin/llama-bench /out/llama-npu/bin/
-          find build -name '*.so' -exec cp {} /out/llama-npu/lib/ \;
+          cp /pkg/bin/llama-server /pkg/bin/llama-bench /out/llama-npu/bin/
+          cp /pkg/lib/*.so /out/llama-npu/lib/
+          find build -name 'libggml-htp-v*.so' -exec cp -n {} /out/llama-npu/lib/ ;
+          find build -name 'libc++_shared.so' -exec cp -n {} /out/llama-npu/lib/ ; || true
           cp /tmp/version.txt /out/llama-npu/
           ls -la /out/llama-npu/bin /out/llama-npu/lib
+          ls /out/llama-npu/lib | grep -q 'libggml-htp-v' || { echo "NPU kernels missing"; exit 1; }
           cd /out && tar czf llama-npu-android.tgz llama-npu && ls -l llama-npu-android.tgz
       - uses: actions/upload-artifact@v4
         with: { name: llama-npu, path: /out/llama-npu-android.tgz }
