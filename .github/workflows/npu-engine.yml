@@ -1,0 +1,43 @@
+name: NPU engine
+# Builds llama.cpp with Qualcomm's Hexagon (NPU) backend for Android, using Qualcomm's public Snapdragon toolchain
+# image, and publishes it as the "npu-engine" release for Termux (tools/get-npu.sh). The Pahunch app stays a PWA:
+# this is only the on-device model server behind it.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/npu-engine.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/snapdragon-toolchain/arm64-android:v0.7
+      options: --user root
+    steps:
+      - name: Build llama.cpp (CPU + Hexagon NPU), server and bench only
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp /src && cd /src
+          git log -1 --format='llama.cpp %h %cs' | tee /tmp/version.txt
+          cp docs/backend/snapdragon/CMakeUserPresets.json .
+          cmake --preset arm64-android-snapdragon-release -B build -DLLAMA_CURL=OFF -DGGML_OPENCL=OFF
+          cmake --build build -j 4 --target llama-server llama-bench
+          mkdir -p /out/llama-npu/bin /out/llama-npu/lib
+          cp build/bin/llama-server build/bin/llama-bench /out/llama-npu/bin/
+          find build -name '*.so' -exec cp {} /out/llama-npu/lib/ \;
+          cp /tmp/version.txt /out/llama-npu/
+          ls -la /out/llama-npu/bin /out/llama-npu/lib
+          cd /out && tar czf llama-npu-android.tgz llama-npu && ls -l llama-npu-android.tgz
+      - uses: actions/upload-artifact@v4
+        with: { name: llama-npu, path: /out/llama-npu-android.tgz }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: llama-npu }
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete npu-engine --yes --cleanup-tag -R "$GITHUB_REPOSITORY" || true
+          gh release create npu-engine llama-npu-android.tgz -R "$GITHUB_REPOSITORY" --title "Pahunch NPU engine (llama.cpp + Hexagon)" --notes "llama-server and llama-bench with Qualcomm's Hexagon NPU backend, for Termux. Install: bash tools/get-npu.sh"
