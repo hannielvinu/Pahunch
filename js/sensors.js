@@ -38,6 +38,9 @@ export class Sensors {
     };
     tryS('GravitySensor', { frequency: 10 }, (s) => { this.gravity = { x: s.x, y: s.y, z: s.z }; });
     tryS('AbsoluteOrientationSensor', { frequency: 10 }, (s) => { this.quat = s.quaternion; });
+    // Gyro + accelerometer fusion without the magnetometer: steady indoors, and the heading below
+    // stays correct when the phone is held upright for the camera (Euler angles break there).
+    tryS('RelativeOrientationSensor', { frequency: 30 }, (s) => { this.heading = cameraHeading(s.quaternion); });
     tryS('AmbientLightSensor', { frequency: 2 }, (s) => { this.lux = s.illuminance; });
     this.avail.Magnetometer = 'Magnetometer' in window;
     this.avail.Proximity = 'ProximitySensor' in window;
@@ -102,15 +105,37 @@ export class Sensors {
   }
 }
 
+// Direction the camera looks, in degrees around the vertical (any fixed origin; only changes matter).
+// Rotates the camera axis (device -Z) into the world frame and takes its horizontal bearing; if the phone
+// lies flat (camera pointing down) the top edge (device +Y) is used instead.
+export function cameraHeading(q) {
+  if (!q) return null;
+  const [x, y, z, w] = q;
+  const rot = (vx, vy, vz) => {
+    // v' = q * v * q^-1
+    const tx = 2 * (y * vz - z * vy), ty = 2 * (z * vx - x * vz), tz = 2 * (x * vy - y * vx);
+    return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)];
+  };
+  let v = rot(0, 0, -1);
+  if (Math.abs(v[2]) > 0.8) v = rot(0, 1, 0);
+  return ((Math.atan2(v[0], v[1]) * 180) / Math.PI + 360) % 360; // clockwise from the world Y axis
+}
+
 // Gyro-based turn detector: same contract as guide.js TurnDetector (delta, tick, want), so the overlay arc works.
+export const TURN_AT = 60; // degrees: a real corner, but not a full 90 (people rarely turn exactly 90)
+
 export class GyroTurn {
   constructor(sensors, compass, want, onTurn) {
     this.s = sensors; this.compass = compass; this.want = want; this.onTurn = onTurn;
     this.y0 = sensors.yaw;
+    this.f0 = sensors.heading ?? null;
     this.h0 = compass?.heading ?? null;
     this.since = null;
   }
   get delta() {
+    // 1) fused orientation (best), 2) integrated gyro, 3) compass.
+    if (this.f0 == null && this.s.heading != null) this.f0 = this.s.heading;
+    if (this.f0 != null && this.s.heading != null) return ((this.s.heading - this.f0 + 540) % 360) - 180;
     const g = this.s.gyro ? this.s.yaw - this.y0 : null;
     const c = this.h0 != null && this.compass?.heading != null ? ((this.compass.heading - this.h0 + 540) % 360) - 180 : null;
     // Gyro first (smooth, not disturbed indoors); compass if there is no gyro.
@@ -119,9 +144,9 @@ export class GyroTurn {
   tick(now = performance.now()) {
     const d = this.delta;
     if (d == null) return;
-    const ok = this.want === 'right' ? d >= 55 && d <= 150 : d <= -55 && d >= -150;
+    const ok = this.want === 'right' ? d >= TURN_AT && d <= 160 : d <= -TURN_AT && d >= -160;
     if (!ok) { this.since = null; return; }
     this.since ??= now;
-    if (now - this.since >= 500) { const f = this.onTurn; this.onTurn = () => {}; f(); }
+    if (now - this.since >= 400) { const f = this.onTurn; this.onTurn = () => {}; f(); }
   }
 }

@@ -200,7 +200,7 @@ export class Overlay {
     const sign = this.turn.want === 'right' ? 1 : -1, ccw = sign < 0;
     const d = this.turn.delta, done = this.turnDone;
     const along = d == null ? 0 : d * sign; // degrees turned in the asked direction
-    const f = done ? 1 : Math.max(0, Math.min(1, along / 55)); // full ring = the angle where the turn counts
+    const f = done ? 1 : Math.max(0, Math.min(1, along / 60)); // full ring = the angle where the turn counts
     const cx = W / 2, cy = H * 0.46, R = Math.min(W, H) * 0.3, col = done ? GREEN : AMBER;
     const a0 = -Math.PI / 2, at = (deg) => a0 + sign * (deg / 90) * (Math.PI / 2);
     ctx.save();
@@ -219,7 +219,7 @@ export class Overlay {
     arrow(ctx, cx + sign * nudge, cy, R * 1.1, sign, col);
     const wrong = !done && d != null && along < -15;
     const dir = this.turn.want === 'right' ? 'RIGHT' : 'LEFT';
-    const line = done ? '✓ Turned' : d == null ? `Turn ${dir}, then tap “I’ve turned”` : wrong ? 'Other way' : along < 10 ? `Turn ${dir} now` : `Turning… ${Math.round(Math.min(100, (along / 55) * 100))}%`;
+    const line = done ? '✓ Turned' : d == null ? `Turn ${dir}, then tap “I’ve turned”` : wrong ? 'Other way' : along < 10 ? `Turn ${dir} now` : `Turning… ${Math.round(Math.min(100, (along / 60) * 100))}%`;
     ctx.font = `800 ${Math.round(R * 0.26)}px system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.7)';
