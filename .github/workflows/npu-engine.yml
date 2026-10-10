@@ -28,8 +28,8 @@ jobs:
           mkdir -p /out/llama-npu/bin /out/llama-npu/lib
           cp /pkg/bin/llama-server /pkg/bin/llama-bench /out/llama-npu/bin/
           cp /pkg/lib/*.so /out/llama-npu/lib/
-          find build -name 'libggml-htp-v*.so' -exec cp -n {} /out/llama-npu/lib/ ;
-          find build -name 'libc++_shared.so' -exec cp -n {} /out/llama-npu/lib/ ; || true
+          for f in $(find build /pkg -name 'libggml-htp-v*.so'); do cp -n "$f" /out/llama-npu/lib/; done
+          for f in $(find build -name 'libc++_shared.so'); do cp -n "$f" /out/llama-npu/lib/; done
           cp /tmp/version.txt /out/llama-npu/
           ls -la /out/llama-npu/bin /out/llama-npu/lib
           ls /out/llama-npu/lib | grep -q 'libggml-htp-v' || { echo "NPU kernels missing"; exit 1; }
