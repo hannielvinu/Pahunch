@@ -26,16 +26,24 @@ fi
 # Offline speech-to-text (whisper.cpp server, port 8082), if tools/get-whisper.sh has been run.
 WHISPER_BIN="$HOME/whisper.cpp/build/bin/whisper-server"
 WMODEL=$(ls models/whisper/ggml-small-q5_1.bin models/whisper/ggml-base.bin 2>/dev/null | head -1)
+LIVEMODEL=$(ls models/whisper/ggml-base.bin 2>/dev/null | head -1)
 if [ -x "$WHISPER_BIN" ] && [ -n "$WMODEL" ]; then
   pkill -f whisper-server 2>/dev/null
-  "$WHISPER_BIN" -m "$WMODEL" --host 127.0.0.1 --port 8082 -l auto -t 4 > whisper.log 2>&1 &
+  # Final pass: 6 threads, 15 s audio window (-ac 768 instead of the default 30 s), flash attention, greedy decoding.
+  "$WHISPER_BIN" -m "$WMODEL" --host 127.0.0.1 --port 8082 -l auto -t 6 -ac 768 -fa -nt -bs 1 > whisper.log 2>&1 &
   WHISPER=$!
   echo "On-device speech ($WMODEL) starting (pid $WHISPER, log: whisper.log)"
+  # Live transcript: a lighter model on its own port so it never delays the final pass.
+  if [ -n "$LIVEMODEL" ] && [ "$LIVEMODEL" != "$WMODEL" ]; then
+    "$WHISPER_BIN" -m "$LIVEMODEL" --host 127.0.0.1 --port 8083 -l auto -t 2 -ac 512 -fa -nt -bs 1 > whisper-live.log 2>&1 &
+    WHISPER_LIVE=$!
+    echo "Live transcript ($LIVEMODEL) on port 8083"
+  fi
 else
   echo "No offline speech yet: run 'bash tools/get-whisper.sh' once."
 fi
 
 pkill -f "http.server 8080" 2>/dev/null
-trap 'kill $LLAMA $WHISPER 2>/dev/null' EXIT
+trap 'kill $LLAMA $WHISPER $WHISPER_LIVE 2>/dev/null' EXIT
 echo "App: http://localhost:8080"
 python -m http.server 8080

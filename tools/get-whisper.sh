@@ -23,6 +23,8 @@ fi
 NAME=ggml-small-q5_1.bin
 [ "${1:-}" = "base" ] && NAME=ggml-base.bin
 mkdir -p models/whisper
-until curl -fL --retry 10 --retry-delay 5 -C - -o "models/whisper/$NAME" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$NAME"; do echo "retrying in 5 s…"; sleep 5; done
+for N in "$NAME" ggml-base.bin; do  # base also powers the fast live transcript
+  until curl -fL --retry 10 --retry-delay 5 -C - -o "models/whisper/$N" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$N"; do echo "retrying in 5 s…"; sleep 5; done
+done
 ls -la models/whisper
 echo "Done. Restart with: bash tools/start.sh  (it starts the speech server on port 8082)"

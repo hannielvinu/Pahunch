@@ -4,17 +4,21 @@
 //  - final: one pass with translate=true, so the route parser gets English whatever was spoken
 // The analyser feeds a real waveform; recording stops by itself after ~1.6 s of silence.
 
-const URL_STT = 'http://localhost:8082/inference';
+const URL_STT = 'http://localhost:8082/inference';   // accurate (small): final pass
+const URL_LIVE = 'http://localhost:8083/inference';  // fast (base): live transcript, optional
+const MAX_S = 15;                                        // matches -ac 768 on the server
 
 export async function sttAvailable() {
   try { await fetch('http://localhost:8082/', { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
 }
 
-function toWav16k(chunks, rate) {
-  const len = chunks.reduce((n, c) => n + c.length, 0);
-  const all = new Float32Array(len);
+function toWav16k(chunks, rate, lastSeconds = MAX_S) {
+  let all = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
   let o = 0;
   for (const c of chunks) { all.set(c, o); o += c.length; }
+  const keep = Math.floor(lastSeconds * rate);
+  if (all.length > keep) all = all.subarray(all.length - keep);
+  const len = all.length;
   const ratio = rate / 16000, n = Math.floor(len / ratio);
   const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
   const w = (p, s) => { for (let i = 0; i < s.length; i++) v.setUint8(p + i, s.charCodeAt(i)); };
@@ -33,13 +37,13 @@ function toWav16k(chunks, rate) {
   return new Blob([buf], { type: 'audio/wav' });
 }
 
-async function transcribe(wav, translate, ms = 20000) {
+async function transcribe(wav, translate, ms = 20000, url = URL_STT) {
   const f = new FormData();
   f.append('file', wav, 'speech.wav');
   f.append('temperature', '0');
   f.append('response_format', 'json');
   if (translate) f.append('translate', 'true');
-  const r = await fetch(URL_STT, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
+  const r = await fetch(url, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error(`speech server ${r.status}`);
   const j = await r.json();
   return (j.text || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim(); // drop [BLANK_AUDIO], (music)…
@@ -60,6 +64,8 @@ export function listen({ canvas, onPartial, onState } = {}) {
     src.connect(proc);
     proc.connect(ctx.destination);
     let stopped = false, spoke = false, quietSince = 0, busy = false, lastLive = 0, original = '';
+    const startedAt = performance.now();
+    const live = await fetch('http://localhost:8083/', { signal: AbortSignal.timeout(400) }).then(() => true, () => false);
     proc.onaudioprocess = (e) => { if (!stopped) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
 
     // Real waveform from the microphone
@@ -71,7 +77,7 @@ export function listen({ canvas, onPartial, onState } = {}) {
       for (const x of data) sum += ((x - 128) / 128) ** 2;
       const rms = Math.sqrt(sum / data.length), now = performance.now();
       if (rms > 0.04) { spoke = true; quietSince = 0; } else if (spoke && !quietSince) quietSince = now;
-      if (spoke && quietSince && now - quietSince > 1600) stopFn();
+      if ((spoke && quietSince && now - quietSince > 1500) || now - startedAt > MAX_S * 1000) stopFn();
       if (g) {
         const W = (canvas.width = canvas.clientWidth * devicePixelRatio), H = (canvas.height = canvas.clientHeight * devicePixelRatio);
         g.clearRect(0, 0, W, H);
@@ -85,15 +91,16 @@ export function listen({ canvas, onPartial, onState } = {}) {
         g.stroke();
       }
       // Live transcript every ~2 s while talking (skipped if the last request is still running)
-      if (spoke && !busy && now - lastLive > 2000 && chunks.length > 4) {
+      // Live transcript only from the fast server (never queue work in front of the final pass).
+      if (live && spoke && !busy && now - lastLive > 1200 && chunks.length > 4) {
         busy = true; lastLive = now;
-        transcribe(toWav16k(chunks, ctx.sampleRate), false).then((t) => { if (t && !stopped) { original = t; onPartial?.(t); } }).catch(() => {}).finally(() => (busy = false));
+        transcribe(toWav16k(chunks, ctx.sampleRate, 10), false, 8000, URL_LIVE).then((t) => { if (t && !stopped) { original = t; onPartial?.(t); } }).catch(() => {}).finally(() => (busy = false));
       }
       if (!stopped) raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
 
-    await new Promise((resolve) => { stopFn = resolve; setTimeout(resolve, 20000); });
+    await new Promise((resolve) => { stopFn = resolve; setTimeout(resolve, MAX_S * 1000 + 500); });
     stopped = true;
     cancelAnimationFrame(raf);
     stream.getTracks().forEach((t) => t.stop());
