@@ -165,6 +165,8 @@ export class Overlay {
       ctx.moveTo(px + dx * c, py); ctx.lineTo(px, py); ctx.lineTo(px, py + dy * c);
     }
     ctx.stroke();
+    ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fillText('Point at the sign · tap to scan', W / 2, y + h + 20); ctx.textAlign = 'start';
     if (this.scanning) {
       const sy = y + ((now / 1600) % 1) * h;
       const g = ctx.createLinearGradient(0, sy - 18, 0, sy + 2);

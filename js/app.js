@@ -359,6 +359,15 @@ function onColour(thirds, colour) {
   decideArrive();
 }
 
+// Tap the camera view: read the centre box now, at full sharpness.
+async function scanNow() {
+  if (!state.running) return;
+  $('#ocr-ms').textContent = 'scanning the box…';
+  navigator.vibrate?.(30);
+  try { const res = await vision.scanBox(); if (res) onOcr(res); else toast('Hold steady and tap again.'); } catch (e) { console.warn(e); }
+}
+$('#video').addEventListener('click', scanNow);
+
 async function ocrLoop() {
   while (state.running) {
     try { onOcr(await vision.read()); } catch (e) { console.warn(e); }

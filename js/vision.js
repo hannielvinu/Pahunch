@@ -227,21 +227,38 @@ export class Vision {
     ctx.putImageData(img, 0, 0);
   }
 
+  // The camera frame is wider/taller than the screen and drawn with object-fit: cover, so much of it is off-screen.
+  // Map a rectangle given in screen fractions (what the user sees) to frame fractions.
+  screenToFrame(r) {
+    const v = this.video, W = v.clientWidth || 1, H = v.clientHeight || 1, vw = v.videoWidth, vh = v.videoHeight;
+    const s = Math.max(W / vw, H / vh), ox = (vw - W / s) / 2, oy = (vh - H / s) / 2;
+    const x = Math.max(0, (ox + r.x * (W / s)) / vw), y = Math.max(0, (oy + r.y * (H / s)) / vh);
+    return { x, y, w: Math.min(1 - x, (r.w * (W / s)) / vw), h: Math.min(1 - y, (r.h * (H / s)) / vh), invert: r.invert, out: r.out };
+  }
+
+  // Tap to scan: wait for the reader, then read the on-screen box at full sharpness.
+  async scanBox() {
+    for (let i = 0; i < 40 && this.ocrBusy; i++) await new Promise((r) => setTimeout(r, 100));
+    return this.read(2);
+  }
+
   // Resolves with { words, boxes, text, ms } or null if the worker is still busy with the last frame.
   // boxes: [{ text, tokens, x, y, w, h }] with x/y/w/h as fractions of the camera frame (0..1).
-  async read() {
+  async read(force) {
     if (!this.worker || this.ocrBusy) return null;
     // Each read looks at the scene a different way, in turn: the wide centre, the same inverted (light text on
     // dark boards), and a 2x zoom on the middle (signs far down the lane). Words seen in the last few reads are
     // kept, so a sign doesn't have to be read in one single frame.
     const v = this.video;
     if (!v.videoWidth) return null;
-    const VIEWS = [{ x: 0.06, y: 0.1, w: 0.88, h: 0.7 }, { x: 0.06, y: 0.1, w: 0.88, h: 0.7, invert: true }, { x: 0.25, y: 0.25, w: 0.5, h: 0.42 }];
-    this.view = ((this.view ?? -1) + 1) % VIEWS.length;
-    const C = VIEWS[this.view];
+    // Views in SCREEN fractions: what is visible, the same inverted, and the centre box the user aims with
+    // (overlay reticle: x 14-86 %, y 30-64 %), read at higher resolution.
+    const VIEWS = [{ x: 0, y: 0.1, w: 1, h: 0.72, out: 1280 }, { x: 0, y: 0.1, w: 1, h: 0.72, invert: true, out: 1280 }, { x: 0.1, y: 0.26, w: 0.8, h: 0.42, out: 1600 }];
+    this.view = force ?? ((this.view ?? -1) + 1) % VIEWS.length;
+    const C = this.screenToFrame(VIEWS[this.view]);
     const sw = v.videoWidth * C.w, sh = v.videoHeight * C.h;
-    this.big.width = 1280;
-    this.big.height = Math.round((1280 * sh) / sw);
+    this.big.width = C.out;
+    this.big.height = Math.round((C.out * sh) / sw);
     const ctx = this.big.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(v, v.videoWidth * C.x, v.videoHeight * C.y, sw, sh, 0, 0, this.big.width, this.big.height);
     this.enhance(ctx, this.big.width, this.big.height, C.invert);
