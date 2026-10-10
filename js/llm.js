@@ -35,6 +35,103 @@ const SHOTS = [
     'PASS school | - | -\nPASS temple | Hanuman | -\nTURN right 1 lane\nARRIVE gate | - | red | - - | -\nFLOOR 3'],
 ];
 
+// Structured output (llama.cpp turns this schema into a grammar, so every answer parses).
+const COLOUR_ENUM = ['', ...COLOURS];
+export const SCHEMA = {
+  type: 'object',
+  properties: {
+    steps: {
+      type: 'array', minItems: 1, maxItems: 8,
+      items: {
+        type: 'object',
+        properties: {
+          kind: { enum: ['pass', 'turn', 'arrive'] },
+          place: { type: 'string', maxLength: 40 },
+          colour: { enum: COLOUR_ENUM },
+          turn: { enum: ['', 'left', 'right'] },
+          n: { type: 'integer', minimum: 0, maximum: 4 },
+          rel: { enum: ['', 'opposite', 'next_to', 'near', 'behind'] },
+          ref: { type: 'string', maxLength: 40 },
+        },
+        required: ['kind', 'place', 'colour', 'turn', 'n', 'rel', 'ref'],
+      },
+    },
+    floor: { type: 'integer', minimum: -1, maximum: 60 },
+  },
+  required: ['steps', 'floor'],
+};
+
+const SYSTEM_JSON = `You convert directions to a house, shop or spot into route steps, in the order travelled.
+Input can be English, Hindi, Kannada, Tamil, Malayalam (romanised, native script or mixed) or an English translation of speech.
+Each step: kind = pass (a landmark you go past or reach), turn (a turn), arrive (the destination; always the last step).
+place = the landmark in plain English words as you would read it on a sign or see it: "Ganesha temple", "MedPlus pharmacy", "coffee machine", "registration desk", "black chair". Use the customer's own proper names; never invent names. Empty for turns.
+colour = colour of that landmark if said. turn = left/right for turns. n = which turn (1 first, 2 second...), 0 if not a turn.
+rel/ref = for the destination only: its relation to another landmark ("blue gate opposite MedPlus" -> rel opposite, ref "MedPlus pharmacy").
+floor = floor number if said (ground = 0), otherwise -1.
+Word hints: mandir/devasthana/gudi/kovil/kshetram=temple, medical=pharmacy, gali/theru/rasta/road=lane, baayen/edakke/idathu/idathottu=left, daayen/balakke/valathu/valathottu=right, pehli/modala/mudhal=1, doosri/eradane/rendavathu/randamathe=2, teesri/mooraneya/moonavathu=3, neela/neeli=blue, laal/kempu/sivappu/chuvanna=red, hara/hasiru/pachai/pacha=green, peela/haladi/manjal=yellow, saamne/edurige/ethire/ethirvasham=opposite, bagal/pakka/pakkathu=next_to, ke baad/datti/thandi/kazhinju=after, manzil/mahadi/maadi/nila=floor.`;
+
+const SHOTS_JSON = [
+  ['From the bus stop go past Apollo pharmacy, take the third right, the white house next to the green bank. Ground floor.',
+    { steps: [{ kind: 'pass', place: 'bus stop', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'pass', place: 'Apollo pharmacy', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'turn', place: '', colour: '', turn: 'right', n: 3, rel: '', ref: '' }, { kind: 'arrive', place: 'house', colour: 'white', turn: '', n: 0, rel: 'next_to', ref: 'green bank' }], floor: 0 }],
+  ['School ke saamne se seedha, Hanuman mandir ke baad pehli gali mein daayen, laal gate wala ghar, teesri manzil',
+    { steps: [{ kind: 'pass', place: 'school', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'pass', place: 'Hanuman temple', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'turn', place: '', colour: '', turn: 'right', n: 1, rel: '', ref: '' }, { kind: 'arrive', place: 'gate', colour: 'red', turn: '', n: 0, rel: '', ref: '' }], floor: 3 }],
+  ['walk to the registration desk, turn left at the coffee machine, the black chair near the stage is my spot',
+    { steps: [{ kind: 'pass', place: 'registration desk', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'pass', place: 'coffee machine', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'turn', place: '', colour: '', turn: 'left', n: 1, rel: '', ref: '' }, { kind: 'arrive', place: 'chair', colour: 'black', turn: '', n: 0, rel: 'near', ref: 'stage' }], floor: -1 }],
+  ['Bus stand la irundhu nera vaanga, Murugan kovil thandi rendavathu theru valathu, pachai gate veedu',
+    { steps: [{ kind: 'pass', place: 'bus stand', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'pass', place: 'Murugan temple', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'turn', place: '', colour: '', turn: 'right', n: 2, rel: '', ref: '' }, { kind: 'arrive', place: 'gate', colour: 'green', turn: '', n: 0, rel: '', ref: '' }], floor: -1 }],
+];
+
+export function messagesJson(note) {
+  const m = [{ role: 'system', content: SYSTEM_JSON }];
+  for (const [q, a] of SHOTS_JSON) m.push({ role: 'user', content: q }, { role: 'assistant', content: JSON.stringify(a) });
+  m.push({ role: 'user', content: note });
+  return m;
+}
+
+// "Ganesha temple" -> { type: temple, name: Ganesha }; "coffee machine" -> { type: other, name: coffee machine }
+function placeToLandmark(place, colour, note) {
+  const words = (place || '').replace(/[^\p{L}\d&' ]/gu, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  let type = null, rest = [], c = colour || null;
+  for (const w of words) {
+    const lw = w.toLowerCase();
+    if (!c && COLOUR_OF[lw]) { c = COLOUR_OF[lw]; continue; }
+    const brand = BRANDS[lw];
+    if (brand) { type ??= brand[0]; rest.push(brand[1]); continue; }
+    const tw = typeOf(lw);
+    if (tw) { type ??= tw; continue; }             // a second type word ("gate house") adds nothing for the camera
+    if (/^(stand|station|stop|area|side|road|building|place)$/i.test(lw)) continue;  // "bus stand" is just the bus stop
+    rest.push(w);
+  }
+  const name = cleanName(rest.join(' '), note) || (type ? null : cleanName(words.join(' '), note));
+  return { type: type || 'other', name, colour: c && COLOURS.has(c) ? c : null };
+}
+
+export function parseJson(out, note) {
+  let j;
+  try { j = JSON.parse(out); } catch { throw new Error('model answer was not complete JSON'); }
+  const steps = [];
+  for (const s of (j.steps || []).slice(0, MAX_STEPS)) {
+    if (s.kind === 'turn') {
+      if (s.turn !== 'left' && s.turn !== 'right') continue;
+      steps.push({ kind: 'turn', turn: s.turn, ordinal: Math.min(4, Math.max(1, s.n || 1)), road: null });
+      continue;
+    }
+    const lm = placeToLandmark(s.place, s.colour, note);
+    let ref = null;
+    if (s.kind === 'arrive' && s.rel && s.ref && mentionsRelation(note)) ref = { relation: s.rel, landmark: placeToLandmark(s.ref, '', note) };
+    if (empty(lm) && !ref && s.kind !== 'arrive') continue;
+    steps.push({ kind: s.kind === 'arrive' ? 'arrive' : 'pass', landmark: empty(lm) ? null : lm, ref });
+  }
+  if (!steps.some((s) => s.kind === 'turn' || !empty(s.landmark))) throw new Error('model found no landmarks or turns');
+  const g = { floor: Number.isInteger(j.floor) && j.floor >= 0 ? j.floor : null, steps };
+  const last = g.steps.at(-1);
+  if (last.kind === 'turn') g.steps.push({ kind: 'arrive', landmark: null, ref: null });
+  else last.kind = 'arrive';
+  g.steps.forEach((s, i) => { if (s.kind === 'arrive' && i < g.steps.length - 1) s.kind = 'pass'; s.n = i + 1; s.verify = verifyFor(s); });
+  return g;
+}
+
 export function messages(note) {
   const m = [{ role: 'system', content: SYSTEM }];
   for (const [q, a] of SHOTS) m.push({ role: 'user', content: q }, { role: 'assistant', content: a });
@@ -178,7 +275,11 @@ async function nativeUp() {
 
 // cache_prompt keeps the system prompt + examples in llama.cpp's KV cache, so after the first call
 // only the customer's note has to be read.
-const nativeBody = (note, extra) => JSON.stringify({ messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
+const nativeBody = (note, extra) => JSON.stringify({
+  messages: messagesJson(note), temperature: 0, max_tokens: 320, cache_prompt: true,
+  response_format: { type: 'json_schema', json_schema: { name: 'route', schema: SCHEMA } },
+  ...extra,
+});
 
 // Fill the prompt cache in the background so the first real request is fast.
 export async function warmNative() {
@@ -190,10 +291,13 @@ export async function warmNative() {
 async function runNative(note, onToken) {
   const t0 = performance.now();
   const ctrl = new AbortController();
-  const r = await fetch(`${NATIVE_URL}/v1/chat/completions`, {
+  const post = (extra) => fetch(`${NATIVE_URL}/v1/chat/completions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-    body: nativeBody(note, { stream: true, stream_options: { include_usage: true } }),
+    body: nativeBody(note, { stream: true, stream_options: { include_usage: true }, ...extra }),
   });
+  let r = await post();
+  // Older llama.cpp builds may not take the schema option: retry with the examples alone (still JSON).
+  if (!r.ok && r.status >= 400 && r.status < 500) r = await post({ response_format: undefined });
   if (!r.ok) throw new Error(`llama-server ${r.status}`);
   // Server-sent events: one JSON chunk per token; the last chunks carry usage and timings.
   const reader = r.body.getReader(), dec = new TextDecoder();
@@ -281,10 +385,12 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   try {
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
     stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
-    const g = ground(parseLines(stats.out, note), rules);
+    const g = ground(backend === 'native' ? parseJson(stats.out, note) : parseLines(stats.out, note), rules);
     Object.assign(g, { lang: rules.lang, parser: 'llm' });
-    // Rules are exact on the words they know; the model covers what they miss.
-    return { graph: complete(rules) ? rules : g, llmGraph: g, stats, rules, agree: agrees(g, rules) };
+    const agree = agrees(g, rules);
+    // Structured, checked AI route first (it reads free-form and translated speech far better);
+    // the rule route is kept as the instant fallback and for the "use other" switch.
+    return { graph: g, llmGraph: g, stats, rules, agree };
   } catch (e) {
     console.warn('LLM parse failed, using rules', e);
     return { graph: rules, stats, fallback: e.message }; // stats kept so the raw output can be inspected

@@ -1,6 +1,6 @@
 // Run: node tests/llm.test.mjs   (checks the strict output reader, no model needed)
 import assert from 'node:assert/strict';
-import { parseLines, agrees, looping } from '../js/llm.js';
+import { parseLines, agrees, looping, parseJson, ground } from '../js/llm.js';
 import { parseRules, SAMPLES, describe } from '../js/parser.js';
 
 let failed = 0;
@@ -52,4 +52,12 @@ check("a looping answer is detected and rejected if it went off-track", () => {
 check("all-empty answer falls back", () => {
   assert.throws(() => parseLines("ARRIVE other | - | - | - - | -", "hello"));
 });
+check('structured (JSON) answer maps places to landmarks and is grounded', () => {
+  const o = { steps: [{ kind: 'pass', place: 'bus stand', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'pass', place: 'Ganesha temple', colour: '', turn: '', n: 0, rel: '', ref: '' }, { kind: 'turn', place: '', colour: '', turn: 'right', n: 4, rel: '', ref: '' }, { kind: 'arrive', place: 'green gate house', colour: '', turn: '', n: 0, rel: 'opposite', ref: 'MedPlus pharmacy' }], floor: 2 };
+  const g = ground(parseJson(JSON.stringify(o), SAMPLES.ta), parseRules(SAMPLES.ta));
+  assert.equal(g.steps.map(describe).join(' | '), 'Pass bus stop | Pass Ganesha temple | Take the 2nd street left | Arrive: green gate opposite MedPlus pharmacy');
+  assert.deepEqual(g.steps.at(-1).verify.signs, ['MEDPLUS']);
+});
+
+check('broken JSON falls back', () => { assert.throws(() => parseJson('{"steps":[{"kind":', 'x')); });
 process.exit(failed ? 1 : 0);

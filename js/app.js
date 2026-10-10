@@ -120,7 +120,10 @@ function chips(step) {
 function renderPlan() {
   const g = state.graph, p = state.parse || {}, st = p.stats;
   const ai = st ? `${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s` : '';
-  $('#parsed-by').textContent = `Understood on this phone in ${st && !p.fallback ? (st.ms / 1000).toFixed(1) + ' s' : g.ms + ' ms'}${st && !p.fallback ? ` · ${st.model.replace(/\.gguf$/, '')}` : ''}`;
+  const usedAI = g.parser === 'llm' && st && !p.fallback;
+  $('#parsed-by').textContent = usedAI
+    ? `Understood on this phone in ${(st.ms / 1000).toFixed(1)} s · on-device AI (${st.model.replace(/.gguf$/, '')})`
+    : `Understood on this phone in ${g.ms} ms · rule engine${p.fallback && p.fallback !== 'no on-device model running' ? ' (AI answer unclear)' : p.fallback ? ' (AI model not running)' : ''}`;
   if (false) $('#parsed-by').textContent = g.parser === 'llm' && st
     ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
     : st && !p.fallback
