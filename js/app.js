@@ -603,14 +603,15 @@ function arrive() {
 function showCard(card, fresh) {
   state.card = card;
   const own = state.arriveBy === 'own';
-  $('#arrive-title').textContent = !fresh ? 'Arrival record' : own ? "You've arrived ✓" : "You're at the place the customer described";
+  void own;
+  $('#arrive-title').textContent = fresh ? "You've arrived" : 'Arrival record';
   $('#arrive-sub').hidden = !fresh;
-  $('#arrive-sub').textContent = own ? "The door's own sign was read." : 'Nothing here proves it is their door: check with the customer before handing over.';
-  $('#arrive-ask').hidden = !fresh || own;
+  $('#arrive-sub').textContent = `End of the customer's directions: ${card.dest}`;
+  $('#arrive-ask').hidden = true;
   $('#arrive-yes').hidden = !fresh;
   $('#done-summary').hidden = true;
   $('#again').textContent = 'New route';
-  $('#tick').hidden = !fresh || !own; // the big tick only when the door's own sign was read
+  $('#tick').hidden = !fresh;
   $('#del').hidden = fresh;
   renderCard();
   // Fresh arrival: tick pops with a ring burst, then the door card rises in (CSS, see .celebrate).
@@ -1285,7 +1286,8 @@ async function pollOrders() {
   $('#orders').hidden = !open.length;
   $('#orders-list').replaceChildren(...open.slice(0, 3).map((o) => {
     const li = el('li'), d = el('div');
-    d.append(el('strong', null, `${o.customer} · ${(o.items || []).reduce((a, i) => a + i.q, 0)} items · ₹${o.total}`),
+    const nItems = (o.items || []).reduce((a, i) => a + i.q, 0);
+    d.append(el('strong', null, `${o.customer} · ${nItems} item${nItems === 1 ? '' : 's'} · ₹${o.total}`),
       el('span', 'meta', `Instakart #${o.id} · ${o.address} · voice directions in ${LANG_NAME[o.lang] || o.lang}`));
     const b = el('button', 'btn primary', 'Accept');
     b.onclick = () => acceptOrder(o);
@@ -1301,9 +1303,35 @@ async function acceptOrder(o) {
   $('#orders').hidden = true;
   postOrder(o.id, 'status', { status: 'accepted' });
   showJob({ src: 'Instakart', id: o.id, who: `${o.customer} · ${o.address}` });
+  if (o.note) return useOrderWords(o);
   if (!o.audio) return toast('This order has no voice directions.');
   try { openVoiceNote(await (await fetch(o.audio)).blob(), { from: `Instakart #${o.id} · ${LANG_NAME[o.lang] || o.lang}`, lang: o.lang }); }
   catch (e) { toast(`Couldn't load the voice note: ${e.message}`); }
+}
+
+// The order carries the customer's own words (recognised on her phone while she spoke, and checked by her).
+// They are used as they are: the route is built from them on this phone, in the rider's language. Her voice note
+// stays playable, and each step plays the matching part of it (timed by position, as there are no word timings).
+async function useOrderWords(o) {
+  show('home');
+  $('#note').value = o.note;
+  state.altNote = null;
+  state.spokenLang = null;
+  state.vnote = null;
+  $('#vnote').hidden = !o.audio;
+  $('#vnote-meta').textContent = `Instakart #${o.id} · words checked by the customer`;
+  if (o.audio) {
+    $('#vnote-audio').src = o.audio;
+    try {
+      const buf = await (await fetch(o.audio)).arrayBuffer();
+      const AC = globalThis.AudioContext || globalThis.webkitAudioContext, ctx = new AC();
+      const dur = (await ctx.decodeAudioData(buf)).duration;
+      ctx.close?.();
+      if (dur > 0) state.vnote = { segments: [{ start: 0, end: dur, text: o.note }], text: o.note };
+    } catch {}
+  }
+  state.lastVoice = { at: new Date().toLocaleTimeString(), chip: 'order words', heard: o.note, english: '', ms: 0 };
+  $('#parse').click();
 }
 
 // The rider's question goes to the customer's order screen, in her language; her one-tap answer comes back.

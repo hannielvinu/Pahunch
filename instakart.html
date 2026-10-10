@@ -89,12 +89,7 @@
     </div>
     <div class="card">
       <p class="label">Help your rider find your door</p>
-      <div class="rec">
-        <button class="mic" id="mic" aria-label="Record voice directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-        <div><strong id="rec-title">Record voice directions</strong><div class="muted" id="rec-state">In your own language: landmarks, turns, gate colour, floor.</div></div>
-      </div>
-      <audio id="rec-audio" controls class="hidden"></audio>
-      <p class="label" style="margin-top:12px">I'm speaking in</p>
+      <p class="label" >I'm speaking in</p>
       <select id="lang">
         <option value="auto">Choose…</option>
         <option value="ta">தமிழ் Tamil</option>
@@ -106,7 +101,15 @@
         <option value="tanglish">Tamil + English mix</option>
         <option value="hinglish">Hindi + English mix</option>
       </select>
-      <p class="muted" style="margin:8px 0 0">Your rider hears this in their own language. Your voice stays on the rider's phone.</p>
+      <div class="rec" style="margin-top:12px">
+        <button class="mic" id="mic" aria-label="Record voice directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <div><strong id="rec-title">Record voice directions</strong><div class="muted" id="rec-state">In your own language: landmarks, turns, gate colour, floor.</div></div>
+      </div>
+      <audio id="rec-audio" controls class="hidden"></audio>
+      <p class="label" style="margin-top:12px">Your words <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· check and correct them</span></p>
+      <textarea id="words" rows="3" placeholder="Your directions appear here as you speak. You can also type them."></textarea>
+      <p class="muted" id="words-src" style="margin:6px 0 0">Recognised by Google speech on your phone while you speak.</p>
+      <p class="muted" style="margin:8px 0 0">Your rider gets these directions in their own language.</p>
     </div>
     <button class="btn" id="place">Place order</button>
     <button class="btn ghost" id="back" style="margin-top:8px">Back to shop</button>
@@ -182,8 +185,34 @@
     }
 
     // Voice directions: recorded with the microphone only (works offline). The rider's phone turns them into a route.
+    // Her words, live, in the language she chose (Chrome speech recognition; online at order time).
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const LOCALE = { ta: 'ta-IN', hi: 'hi-IN', kn: 'kn-IN', ml: 'ml-IN', bn: 'bn-IN', en: 'en-IN', tanglish: 'ta-IN', hinglish: 'hi-IN' };
+    let recog = null, finalWords = '';
+    function startWords() {
+      if (!SR) { $('#words-src').textContent = 'This browser cannot show your words: please type them.'; return; }
+      finalWords = $('#words').value.trim() ? $('#words').value.trim() + ' ' : '';
+      recog = new SR();
+      recog.lang = LOCALE[$('#lang').value] || 'en-IN';
+      recog.interimResults = true;
+      recog.continuous = true;
+      recog.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finalWords += e.results[i][0].transcript.trim() + ' ';
+          else interim += e.results[i][0].transcript;
+        }
+        $('#words').value = (finalWords + interim).trim();
+      };
+      recog.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') $('#words-src').textContent = `Words not recognised (${e.error}): please type them.`; };
+      recog.onend = () => { if (rec && recog) { try { recog.start(); } catch {} } }; // keep listening while recording
+      try { recog.start(); } catch {}
+    }
+    function stopWords() { const r = recog; recog = null; try { r?.stop(); } catch {} }
+
     $('#mic').onclick = async () => {
-      if (rec) { rec.stop(); return; }
+      if (rec) { rec.stop(); stopWords(); return; }
+      if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'First choose the language you will speak in.'; return; }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
         const chunks = [], t0 = Date.now();
@@ -200,6 +229,7 @@
           r.readAsDataURL(blob);
         };
         rec.start();
+        startWords();
         rec.timer = setInterval(() => ($('#rec-state').textContent = `Recording… ${Math.round((Date.now() - t0) / 1000)} s · tap to stop`), 500);
         $('#mic').classList.add('live');
         $('#rec-title').textContent = 'Listening';
@@ -207,10 +237,10 @@
     };
 
     $('#place').onclick = async () => {
-      if (!audioUrl) { $('#rec-state').textContent = 'Please record your voice directions first.'; return; }
+      if (!audioUrl && !$('#words').value.trim()) { $('#rec-state').textContent = 'Please record (or type) your directions first.'; return; }
       if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'Choose the language you spoke in.'; return; }
       const items = [...cart].map(([id, q]) => ({ name: PRODUCTS[id].name, q, price: PRODUCTS[id].price }));
-      const order = { customer: 'Priya S.', phone: '+91 98xxx xx210', address: 'Flat 2B, 4th Cross, Indiranagar', items, total: items.reduce((a, i) => a + i.price * i.q, 0), lang: $('#lang').value, audio: audioUrl };
+      const order = { customer: 'Priya S.', phone: '+91 98xxx xx210', address: 'Flat 2B, 4th Cross, Indiranagar', items, total: items.reduce((a, i) => a + i.price * i.q, 0), lang: $('#lang').value, note: $('#words').value.trim(), audio: audioUrl };
       $('#place').disabled = true; $('#place').textContent = 'Placing order…';
       try {
         const r = await fetch('api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order) });

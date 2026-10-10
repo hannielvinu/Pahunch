@@ -21,15 +21,15 @@ whose answer the rider can understand.
   must be in the customer's words (22/22 invented landmarks dropped in tests).
 
 ## The demo: Instakart → Pahunch
-1. **Customer** opens `instakart.html` (a demo quick-commerce shop, not a real brand), adds items, and at checkout
-   **records voice directions in her own language** ("I'm speaking in: Tamil"), then places the order.
+1. **Customer** opens `instakart.html` (a demo quick-commerce shop, not a real brand), adds items, picks the language she
+   speaks, and **records voice directions**. Her words appear live as she speaks (Chrome's Google speech recognition,
+   online at order time) and she corrects them before placing the order. The order carries her checked words + voice.
 2. **Rider** (Pahunch, on the phone): the order pops up on the home screen → **Accept**. The voice note is
-   transcribed on the phone and becomes numbered steps in **the rider's language** ("Guide me in: हिन्दी"), each with
+   (her checked words; Whisper on the phone only if an order has none) becomes numbered steps in **the rider's language** ("Guide me in: हिन्दी"), each with
    ▶ her own words, then guidance by voice, vibration and the camera.
-3. **At the gate:** "You're at the place the customer described" → **Ask** → the question in *her* language goes to her
-   order screen in Instakart ("இதுதான் உங்க கேட்டா?" with ஆமா / இல்ல buttons). Her tap comes back to the rider.
-   "No" → "How many more gates?" → she taps 2 → a new step → guidance resumes. "Yes" → **Delivered** on both screens,
-   with an honest summary of how each step was confirmed (sign / cue / you).
+3. **Arrival:** the end of the customer's directions: "You've arrived" → **Mark as delivered** → Delivered on both
+   screens, with a summary of how each step was confirmed (sign / cue / you). Whether it is her exact gate is not
+   Pahunch's job: it gets the rider to the place she described.
 
 Orders live in `orders/` on the phone, served by `tools/serve.py` (`/api/orders`). Nothing leaves the phone.
 
