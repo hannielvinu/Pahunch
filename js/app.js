@@ -8,10 +8,9 @@ import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
 import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
-import { dictate, CommandListener, voiceAvailable, localSpeechSupported, commandOf } from './voice.js';
+import { dictate, CommandListener, voiceAvailable, localSpeechStatus, installLocalSpeech, localeFor } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
-import { app, appListen, engineName, offlinePacks, localeOf } from './bridge.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
 
@@ -472,7 +471,6 @@ function stopGuide() {
   clearTimeout(state.raf);
   clearTimeout(state.detTimer);
   listener.stop();
-  appHands.stop();
   $('#handsfree').setAttribute('aria-pressed', 'false');
   vision.setTorch(false);
   overlay.stop();
@@ -561,7 +559,7 @@ async function fixPosition(card) {
   renderCard();
   let e = sensors.estimate();
   if (!e || e.estimated) {
-    const pos = await locate(app ? 8000 : 12000);
+    const pos = await locate(12000);
     if (pos) e = { lat: pos.latitude, lon: pos.longitude, acc: pos.accuracy, estimated: false };
   }
   state.locating = false;
@@ -662,33 +660,8 @@ const listener = new CommandListener((cmd) => {
   if (off) { $('#handsfree').setAttribute('aria-pressed', 'false'); return toast(off === 'network' ? 'Hands-free is off: no offline speech pack for this language. Tap Yes / Not yet.' : `Hands-free is off (${off}).`, 6000); }
   toast(`Heard: "${heard}"`);
 });
-// In the Android app: short listens in a loop through Android's recogniser.
-const appHands = {
-  on: false,
-  async run() {
-    while (this.on && state.running) {
-      this.rec = appListen(state.lang);
-      try {
-        const c = commandOf((await this.rec.done).text);
-        if (c === 'yes' && state.asking) $('#yes').click();
-        else if (c === 'no' && state.asking) $('#notyet').click();
-        else if (c === 'skip') $('#skip').click();
-        else if (c === 'repeat' && say.last) say(say.last.line, say.last.lang);
-        else if (c === 'stop') $('#stop').click();
-      } catch (e) { if (!['NO_MATCH', 'SPEECH_TIMEOUT'].includes(e.code)) { toast(e.message, 6000); this.stop(); } }
-    }
-  },
-  start() { this.on = true; this.run(); },
-  stop() { if (this.on) app?.cancel(); this.on = false; $('#handsfree').setAttribute('aria-pressed', 'false'); },
-};
 $('#handsfree').onclick = () => {
   const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
-  if (app) {
-    if (on) return appHands.stop();
-    appHands.start();
-    $('#handsfree').setAttribute('aria-pressed', 'true');
-    return toast('Listening: say "yes", "haan", "aama", "skip" or "repeat".');
-  }
   if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }
   if (!voiceAvailable) return toast('Voice commands need Chrome speech recognition.');
   listener.start(state.lang);
@@ -705,7 +678,10 @@ const keyboardVoice = () => speechEngine === 'keyboard';
 // Whisper until the phone is back online, so the rider is asked to repeat at most once.
 const phoneOfflineFails = new Set();
 addEventListener('online', () => phoneOfflineFails.clear());
-const usePhoneEngine = () => voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || !phoneOfflineFails.has(speechLang));
+// Offline it is used only for languages Chrome has downloaded for on-device recognition (else straight to Whisper).
+const localReady = new Set();
+const onDeviceNow = () => !navigator.onLine && localReady.has(localeFor(speechLang));
+const usePhoneEngine = () => voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || (onDeviceNow() && !phoneOfflineFails.has(speechLang)));
 const phoneFailed = (e) => { if (!navigator.onLine && !['no-speech', 'aborted'].includes(e?.code)) phoneOfflineFails.add(speechLang); };
 let kbd = null; // { t0 } while keyboard dictation is open
 function kbdOpen() {
@@ -753,37 +729,15 @@ $('#mic').onclick = async () => {
   };
   try {
     let heard = '';
-    // 0) In the Android app: Android's own recogniser (Google's, on-device with the offline packs), online or not.
-    if (app && speechEngine !== 'whisper') {
-      $('#vtitle').textContent = 'Listening…';
-      const t0 = performance.now();
-      const rec = appListen(speechLang, {
-        onPartial: (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; },
-        onState: (st, engine) => ($('#vtitle').textContent = st === 'hearing' ? 'Hearing you · ' + engineName(engine) : 'Listening · ' + engineName(engine)),
-        onLevel: (db) => sheet.style.setProperty('--lvl', Math.max(0.15, Math.min(1, (db + 2) / 10)).toFixed(2)),
-      });
-      micStop = rec.stop;
-      try {
-        const r = await rec.done;
-        heard = r.text;
-        done(heard, '', Math.round(performance.now() - t0));
-        state.lastVoice.engine = r.engine;
-      } catch (e) {
-        if (e.code === 'NO_MATCH' || e.code === 'SPEECH_TIMEOUT' || !(await sttAvailable())) throw e;
-        $('#vtitle').textContent = 'No offline pack for this language · using on-device Whisper';
-        $('#vlive').textContent = 'Please say it once more';
-        sheet.classList.remove('speaking');
-      }
-    }
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
     //    Offline it runs on the phone when the language's offline pack is installed.
-    if (!heard && !app && usePhoneEngine()) {
+    if (usePhoneEngine()) {
       const offline = !navigator.onLine;
-      $('#vtitle').textContent = offline ? 'Listening · offline, on this phone' : 'Listening…';
+      $('#vtitle').textContent = offline ? 'Listening · Google on-device speech, offline' : 'Listening…';
       micStop = () => dictate.stop?.();
       const t0 = performance.now();
       try {
-        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m), { local: offline && localSpeechSupported() });
+        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m), { local: onDeviceNow() });
         if (heard) done(heard, '', Math.round(performance.now() - t0));
       } catch (e) {
         phoneFailed(e);
@@ -935,13 +889,9 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (app && speechEngine !== 'whisper') {
-      const rec = appListen(speechLang, { onPartial: (p) => ($('#s-heard').textContent = p) });
-      micStop = rec.stop;
-      try { heard = (await rec.done).text; } catch (e) { if (e.code === 'NO_MATCH' || !(await sttAvailable())) throw e; $('#s-heard').textContent = 'Using on-device Whisper · please say it once more'; }
-    } else if (usePhoneEngine()) {
+    if (usePhoneEngine()) {
       micStop = () => dictate.stop?.();
-      try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p), null, { local: !navigator.onLine && localSpeechSupported() }); }
+      try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p), null, { local: onDeviceNow() }); }
       catch (e) { phoneFailed(e); if (!(await sttAvailable())) throw e; $('#s-heard').textContent = 'Using on-device Whisper · please say it once more'; }
     }
     if (!heard && (await sttAvailable())) {
@@ -1034,20 +984,31 @@ function showJob({ src, id, who } = {}) {
   $('#job-who').textContent = who || '';
 }
 
-// ---------- Offline voice packs on this phone (Android app, Android 13+) ----------
+// ---------- Offline voice: Chrome's own on-device speech recognition, where this Chrome offers it ----------
+// Chrome can download speech models per language and recognise on the phone (no network). Shown only when this
+// Chrome supports it; otherwise offline voice uses Whisper on the phone.
 const PACK_LANGS = [['en-IN', 'English'], ['hi-IN', 'हिन्दी'], ['ta-IN', 'தமிழ்'], ['kn-IN', 'ಕನ್ನಡ'], ['ml-IN', 'മലയാളം']];
 async function showVoicePacks() {
-  if (!app) return;
-  const el2 = $('#voice-pack');
-  const p = await offlinePacks('en-IN');
-  el2.hidden = false;
-  if (!p.known) { el2.textContent = 'Voice: Google speech on this phone'; return; }
-  const has = (l) => p.installed.some((x) => x.toLowerCase().startsWith(l.toLowerCase()) || x.toLowerCase() === l.split('-')[0]);
-  el2.replaceChildren(document.createTextNode('Offline voice: '));
+  const line = $('#voice-pack');
+  const st = await Promise.all(PACK_LANGS.map(([l]) => localSpeechStatus(l)));
+  PACK_LANGS.forEach(([l], i) => (st[i] === 'available' ? localReady.add(l) : localReady.delete(l)));
+  // Nothing on-device here (or nothing to download): offline voice is Whisper, so don't show a row of dashes.
+  if (!st.some((x) => ['available', 'downloadable', 'downloading'].includes(x))) { line.hidden = true; return; }
+  line.hidden = false;
+  line.replaceChildren(document.createTextNode('Offline voice: '));
   PACK_LANGS.forEach(([l, name], i) => {
-    const b = el('b', null, `${name} ${has(l) ? '✓' : '–'}`);
-    if (!has(l)) { b.style.cursor = 'pointer'; b.onclick = () => { if (!navigator.onLine) return toast('Connect once to download this voice pack.'); app.download(l); toast(`Downloading ${name} voice pack…`); }; }
-    el2.append(b, document.createTextNode(i < PACK_LANGS.length - 1 ? ' · ' : ''));
+    const ok = st[i] === 'available';
+    const b = el('b', null, `${name} ${ok ? '✓' : st[i] === 'downloadable' ? '↓' : '–'}`);
+    if (st[i] === 'downloadable') {
+      b.style.cursor = 'pointer';
+      b.onclick = async () => {
+        if (!navigator.onLine) return toast('Connect once to download this language for offline voice.');
+        toast(`Downloading ${name} for offline voice…`);
+        toast((await installLocalSpeech(l)) ? `${name} ready offline.` : `${name} could not be downloaded.`);
+        showVoicePacks();
+      };
+    }
+    line.append(b, document.createTextNode(i < PACK_LANGS.length - 1 ? ' · ' : ''));
   });
 }
 

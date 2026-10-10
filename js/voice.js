@@ -11,6 +11,24 @@ export function localSpeechSupported() {
 }
 
 const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', tanglish: 'ta-IN', hinglish: 'hi-IN', auto: 'en-IN' };
+export const localeFor = (lang) => RECOG_LANG[lang] || 'en-IN';
+
+// Chrome's on-device speech recognition (Google's models, downloaded per language, runs with no network).
+// -> 'available' | 'downloadable' | 'downloading' | 'unavailable' | 'unsupported' (this Chrome has no such API)
+export async function localSpeechStatus(locale) {
+  try {
+    if (SR?.available) return await SR.available({ langs: [locale], processLocally: true });
+    if (SR?.availableOnDevice) return await SR.availableOnDevice(locale); // earlier Chrome name
+  } catch { return 'unavailable'; }
+  return 'unsupported';
+}
+export async function installLocalSpeech(locale) {
+  try {
+    if (SR?.install) return !!(await SR.install({ langs: [locale], processLocally: true }));
+    if (SR?.installOnDevice) return !!(await SR.installOnDevice(locale));
+  } catch {}
+  return false;
+}
 
 // One-shot dictation. onPartial gets the live transcript; resolves with the final text.
 export function dictate(lang = 'en', onPartial, onState, { local = false } = {}) {
@@ -21,7 +39,7 @@ export function dictate(lang = 'en', onPartial, onState, { local = false } = {})
     r.interimResults = true;
     r.continuous = false;
     r.maxAlternatives = 1;
-    if (local && 'processLocally' in r) r.processLocally = true; // on-device recogniser (offline capable)
+    if (local) { if ('processLocally' in r) r.processLocally = true; else if ('mode' in r) r.mode = 'ondevice-only'; } // on-device, offline
     let text = '', finished = false;
     const finish = () => { if (finished) return; finished = true; clearTimeout(idle); resolve(text.trim()); };
     // Nothing recognised for 8 s: stop instead of waiting forever.

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Partner App Demo</title>
   <link rel="icon" href="icons/favicon.png?v=3" type="image/png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f766e">
   <style>
     @font-face { font-family: Inter; src: url(lib/fonts/inter.woff2) format("woff2"); font-weight: 100 900; }
     :root { --bg: #f3f4f6; --card: #fff; --text: #16181d; --dim: #6b6f76; --line: #e6e7ea; --brand: #0f766e; --brand-soft: #e6f4f2; --pah: #e23744; --amb: #e11d48; }
@@ -99,10 +101,9 @@
       <p class="note">Emergency mode: no questions asked, torch on in the dark, big prompts.</p>
     </section>
 
-    <p class="note">How partners integrate: one link (or intent) with the customer's own words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
+    <p class="note">How partners integrate: one link with the customer's own words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
   </main>
   <script type="module">
-    import { app, appListen } from './js/bridge.js';
     const $ = (s) => document.querySelector(s);
     const KEY = 'pahunch.partner.directions';
     const SAMPLE = 'Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate. Doosri manzil.';
@@ -150,7 +151,7 @@
       }, 650);
     };
 
-    // Customer: speak the directions once (Android's recogniser in the app; Chrome speech otherwise)
+    // Customer: speak the directions once (Chrome speech)
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     let stop = null;
     $('#c-mic').onclick = async () => {
@@ -158,11 +159,7 @@
       $('#c-mic').classList.add('live');
       $('#c-state').textContent = 'Listening…';
       try {
-        if (app) {
-          const r = appListen('auto', { onPartial: (p) => ($('#c-text').value = p) });
-          stop = r.stop;
-          $('#c-text').value = (await r.done).text;
-        } else if (SR) {
+        if (SR) {
           await new Promise((res, rej) => {
             const r = new SR(); r.lang = 'en-IN'; r.interimResults = true;
             r.onresult = (e) => { $('#c-text').value = [...e.results].map((x) => x[0].transcript).join(' '); };

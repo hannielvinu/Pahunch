@@ -1,5 +1,4 @@
 // Voice prompts (en/hi/kn/ta), vibration vocabulary and the compass turn detector.
-import { app } from './bridge.js';
 
 const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN' };
 
@@ -64,8 +63,6 @@ function bestVoice(lang) {
 }
 
 export function say(line, lang = 'en') {
-  say.last = { line, lang };
-  if (app) return app.speak(line, VOICE_LANG[lang] || 'en-IN'); // Android text-to-speech (offline voices)
   if (!('speechSynthesis' in globalThis)) return;
   const u = new SpeechSynthesisUtterance(line);
   u.lang = VOICE_LANG[lang] || 'en-IN';
@@ -82,7 +79,7 @@ export function say(line, lang = 'en') {
 
 // Call from a tap: Chrome only lets a page talk after the user has interacted with it.
 export function unlockSpeech() {
-  if (app || !('speechSynthesis' in globalThis) || unlockSpeech.done) return;
+  if (!('speechSynthesis' in globalThis) || unlockSpeech.done) return;
   const u = new SpeechSynthesisUtterance(' ');
   u.volume = 0;
   speechSynthesis.speak(u);

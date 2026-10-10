@@ -61,10 +61,7 @@ tests/heldout.test.mjs: 30 routes written after tuning: 23/30 on first run (2 of
 30/30 after general fixes. Routing: if the rules understand every word (unknownWords empty) the model is not asked
 ("every word understood, AI not needed"); otherwise Gemma rewrites and its landmarks must be said (any script).
 
-## Android app (Sat 19:20)
-android/ = WebView shell (MainActivity.java) loading http://localhost:8080 from Termux. Bridge window.PahunchNative
-(js/bridge.js): listen(locale) via SpeechRecognizer (on-device recogniser first, then default with PREFER_OFFLINE),
-speak() via TextToSpeech, GPS via LocationManager, languages()/download() for offline packs (Android 13+), pahunch://go
-hand-over. CI: .github/workflows/android.yml + android/build.sh (aapt2/javac/d8/apksigner), keystore in repo secrets
-ANDROID_KEYSTORE / ANDROID_KEYSTORE_PASS. APK: https://github.com/hannielvinu/Pahunch/releases/download/app-latest/Pahunch.apk
+## PWA only (Sat 20:00): NO native app (Hanniel's firm decision; the Android shell was removed)
+Offline voice: Chrome on-device speech (SpeechRecognition.available/install with processLocally) for downloaded
+languages, else Whisper (tools/get-whisper.sh turbo -> large-v3-turbo, picked first by start.sh). Icons: tools/make-icons.mjs.
 Developer tools hidden: tap the logo 5x (or ?dev). Door card: live fix, else last fix + steps (approx.), upgrades later.

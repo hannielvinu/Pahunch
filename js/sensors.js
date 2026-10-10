@@ -4,7 +4,6 @@
 //   accelerometer (linear) -> walking steps and distance since the last landmark
 //   gravity, rotation vector (absolute orientation), GPS watch, ambient light (sensor or camera brightness)
 // Light, proximity, IR and raw magnetometer have no web API in Chrome by default: reported as "native only".
-import { app, on, appLocation } from './bridge.js';
 
 const FIX_KEY = 'pahunch.lastfix';
 
@@ -72,12 +71,6 @@ export class Sensors {
   }
 
   watchGps() {
-    // In the Android app: satellite GPS straight from the phone (works in airplane mode, outdoors).
-    if (app) {
-      const n = appLocation();
-      if (n) this._fix(n.lat, n.lon, n.acc, n.at);
-      on('location', (d) => this._fix(d.lat, d.lon, d.acc, d.at));
-    }
     if (!navigator.geolocation) { this.gpsError = 'no GPS API'; return; }
     navigator.geolocation.clearWatch?.(this._watch);
     const ok = (p) => this._fix(p.coords.latitude, p.coords.longitude, p.coords.accuracy);

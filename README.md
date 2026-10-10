@@ -31,7 +31,7 @@ Modes: delivery rider, ambulance / 108 (no questions, torch, emergency prompts),
 The **rider** (delivery partner, 108 ambulance crew, cab driver) is the user; the **customer** only does what they
 already do: say how to reach them, once, in their own words (a voice note in the order, or to the 108 call-taker).
 The partner app (delivery, dispatch, ride-hailing) holds those words and, when the rider reaches the last ~100 m
-where map navigation ends, hands the job to Pahunch with one link or intent (`pahunch://go?text=…&mode=…`).
+where map navigation ends, hands the job to Pahunch with one link (`index.html#go=<words>&mode=delivery&job=…&who=…`).
 Pahunch plans, guides to the door, and saves a door card, so the next rider to that customer needs no directions.
 `partner.html` demonstrates all three sides: the customer speaking directions, the rider's last-100 m hand-over,
 and 108 dispatch.
@@ -41,7 +41,7 @@ DIGIPIN is India Post's national grid: every ~4 m × 4 m square in India has a 1
 latitude/longitude by a public formula, so it works offline and needs no server. It turns "the blue gate opposite
 MedPlus, 2nd floor" into something any system can store and share (delivery apps, 108, India Post). Offline, the
 phone has satellites only: indoors it may have no fix. Then the card uses the last good fix widened by the steps
-walked since (marked approx.) and fills in by itself when GPS returns. The Android app reads satellite GPS directly.
+walked since (marked approx.) and fills in by itself when GPS returns.
 
 ## Measured on the iQOO 15 (Snapdragon 8 Elite Gen 5)
 
@@ -62,12 +62,12 @@ Termux); vision runs on the Adreno GPU through MediaPipe (WebGL). Chrome cannot 
 production path is a native app using Qualcomm's QNN / Genie runtime for the NPU; `tools/start.sh` already
 uses an OpenCL (Adreno GPU) build of llama.cpp when one is present.
 
-## Android app
-`android/` is a small native shell (built in CI without Gradle, published as the `app-latest` release). It shows
-the app full screen and gives it what Chrome can't: **Android's own speech recogniser** (Google's, on-device when the
-language's offline pack is installed, the engine Gboard voice typing uses), Android text-to-speech, and satellite GPS
-in airplane mode. The app and the AI still run in Termux on the same phone; the shell loads `http://localhost:8080`
-and can start the engine itself (Termux `allow-external-apps=true`).
+## Offline voice in the PWA
+Online, the mic uses Chrome's Web Speech API (Google's recogniser), per language. Offline (airplane mode), it uses
+Chrome's **on-device speech recognition** for every language this Chrome has downloaded for on-device use (the home
+screen shows "Offline voice: English ✓ · தமிழ் ↓ …"; tap ↓ while online to download). Languages without it go to
+Whisper running in Termux on the phone (`bash tools/get-whisper.sh turbo` installs large-v3-turbo, the most accurate
+for Indian languages). Install Pahunch from Chrome's menu (Add to home screen / Install app) to run it full screen.
 
 ## Run on the phone (Termux + Chrome)
 

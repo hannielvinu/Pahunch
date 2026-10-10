@@ -53,7 +53,7 @@ fi
 # Offline speech-to-text (whisper.cpp server, port 8082), if tools/get-whisper.sh has been run.
 WHISPER_BIN="$HOME/whisper.cpp/build/bin/whisper-server"
 # Best available model for the final pass (WHISPER_MODEL=... overrides).
-WMODEL=${WHISPER_MODEL:-$(pick models/whisper/ggml-medium-q5_0.bin models/whisper/ggml-small-q5_1.bin models/whisper/ggml-base.bin)}
+WMODEL=${WHISPER_MODEL:-$(pick models/whisper/ggml-large-v3-turbo-q5_0.bin models/whisper/ggml-medium-q5_0.bin models/whisper/ggml-small-q5_1.bin models/whisper/ggml-base.bin)}
 LIVEMODEL=$(pick models/whisper/ggml-base.bin)
 if [ -x "$WHISPER_BIN" ] && [ -n "$WMODEL" ]; then
   pkill -f whisper-server 2>/dev/null
