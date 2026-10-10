@@ -81,7 +81,7 @@ const SPLIT = /[.,;!?\n।]+|\b(?:then|and then|after that|uske baad|iske baad|p
 const LANG_HINTS = {
   hi: set('se ke ki ka mein baad aao mudo mudiye saamne doosri manzil gali seedha baayen daayen neela mandir wala'),
   kn: set('inda alli edakke balakke datti nera banni eradane amele edurige devasthana neeli mahadi'),
-  ta: set('la nera vaanga thandi theru idathu valathu appuram ethire kovil rendavathu neela mudhal'),
+  ta: set('poi po ponga pannu cut kadai veedu la nera vaanga thandi theru idathu valathu appuram ethire kovil rendavathu neela mudhal'),
 };
 
 function normalise(text) {

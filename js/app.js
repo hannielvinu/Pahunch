@@ -4,7 +4,7 @@ import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
-import { say, text, buzz, Compass, unlockSpeech } from './guide.js';
+import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
 import { Detector } from './detector.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable } from './voice.js';
@@ -92,7 +92,7 @@ $('#parse').onclick = async () => {
   if (res.stats) state.inferences.push({ at: Date.now(), ...res.stats });
   if (res.fallback && $('#engine').value !== 'auto') toast(`On-device model not used (${res.fallback}). Rule parser took over.`);
   const pick = $('#voice').value;
-  state.lang = pick === 'auto' ? state.graph.lang : pick;
+  state.lang = pick === 'auto' ? state.spokenLang || state.graph.lang : pick; // reply in the language that was spoken
   renderPlan();
   show('plan');
 };
@@ -160,9 +160,7 @@ const step = () => state.graph.steps[state.i];
 const T = () => text(state.lang);
 
 function spokenName(lm) {
-  if (!lm) return T().dest;
-  const type = { pharmacy: 'pharmacy', temple: 'temple', store: 'store', sign: 'sign', desk: 'desk' }[lm.type] || lm.type.replace('_', ' ');
-  return [lm.colour, lm.name, lm.name && (lm.type === 'sign' || lm.type === 'gate') ? '' : type].filter(Boolean).join(' ');
+  return localName(lm, state.lang);
 }
 
 function announce(prefix = '') {
@@ -180,7 +178,9 @@ function announce(prefix = '') {
   $('#colour-bars').hidden = !s.verify.colour;
   overlay.clearStep();
   // One utterance: "MedPlus detected. Now take the second turn on the left."
-  const lead = prefix ? `${prefix} ${T().now} ` : ambulance() && s.n === 1 ? 'Emergency route. ' : '';
+  // First step opens the route like a person would: "Okay, let's go. First, go straight."
+  const intro = s.n === 1 && !prefix ? `${ambulance() ? 'Emergency route. ' : ''}${T().intro} ${s.kind === 'pass' ? T().straight + ' ' : ''}` : '';
+  const lead = prefix ? `${prefix} ${T().now} ` : intro;
   if (s.kind === 'turn') {
     say(lead + T().turn(s.ordinal, T()[s.turn]), state.lang);
     buzz(s.turn);
@@ -548,6 +548,7 @@ $('#mic').onclick = async () => {
       const r = await rec.done;
       if (r.text) {
         $('#note').value = r.text;
+        state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
         if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
         else status.hidden = true;
       } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }

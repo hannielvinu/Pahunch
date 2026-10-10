@@ -1,31 +1,44 @@
 // Voice prompts (en/hi/kn/ta), vibration vocabulary and the compass turn detector.
 
-const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN' };
+const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN' };
 
+// Spoken guidance, colloquial (how a person on the phone would guide you), in the rider's language.
+// intro + straight start the route; spotted + now + next instruction are spoken as one sentence.
 const TEXT = {
   en: {
-    look: (x) => `Look for the ${x}.`, spotted: (x) => `${x} detected.`, now: 'Now', ask: (x) => `Is this the ${x}?`,
+    intro: "Okay, let's go.", straight: 'First, go straight.',
+    look: (x) => `Look out for the ${x}.`, spotted: (x) => `Yes, that's the ${x}.`, ask: (x) => `Is this the ${x}?`,
     turn: (o, d) => `Take the ${['', 'first', 'second', 'third', 'fourth'][o] || o} turn on the ${d}.`,
-    turned: 'Turn confirmed.', arrived: (f) => `You have arrived.${f != null ? ` Floor ${f}.` : ''}`,
-    left: 'left', right: 'right', dest: 'destination',
+    turned: "Good, you've turned.", arrived: (f) => `You've reached. This is the door.${f != null ? ` Floor ${f === 0 ? 'ground' : f}.` : ''}`,
+    now: 'Now', left: 'left', right: 'right', dest: 'destination',
   },
   hi: {
-    look: (x) => `${x} ढूंढिए।`, spotted: (x) => `${x} मिल गया।`, now: 'अब', ask: (x) => `क्या यह ${x} है?`,
+    intro: 'ठीक है, चलिए।', straight: 'पहले सीधा जाइए।',
+    look: (x) => `${x} देखते रहिए।`, spotted: (x) => `हाँ, सही है, ${x} आ गया।`, ask: (x) => `क्या यही ${x} है?`,
     turn: (o, d) => `${['', 'पहली', 'दूसरी', 'तीसरी', 'चौथी'][o] || o} गली में ${d} मुड़िए।`,
-    turned: 'मुड़ गए, बढ़िया।', arrived: (f) => `आप पहुँच गए।${f != null ? ` मंज़िल ${f}।` : ''}`,
-    left: 'बाएं', right: 'दाएं', dest: 'मंज़िल',
-  },
-  kn: {
-    look: (x) => `${x} ನೋಡಿ.`, spotted: (x) => `${x} ಸಿಕ್ಕಿತು.`, now: 'ಈಗ', ask: (x) => `ಇದು ${x} ಆ?`,
-    turn: (o, d) => `${['', 'ಮೊದಲ', 'ಎರಡನೇ', 'ಮೂರನೇ', 'ನಾಲ್ಕನೇ'][o] || o} ರಸ್ತೆಯಲ್ಲಿ ${d} ತಿರುಗಿ.`,
-    turned: 'ತಿರುಗಿದ್ದೀರಿ.', arrived: (f) => `ನೀವು ತಲುಪಿದ್ದೀರಿ.${f != null ? ` ಮಹಡಿ ${f}.` : ''}`,
-    left: 'ಎಡಕ್ಕೆ', right: 'ಬಲಕ್ಕೆ', dest: 'ಸ್ಥಳ',
+    turned: 'बढ़िया, मुड़ गए।', arrived: (f) => `पहुँच गए! यही दरवाज़ा है।${f != null ? ` ${f === 0 ? 'ग्राउंड फ़्लोर' : `${f} मंज़िल`}।` : ''}`,
+    now: 'अब', left: 'बाएं', right: 'दाएं', dest: 'मंज़िल',
   },
   ta: {
-    look: (x) => `${x} பாருங்கள்.`, spotted: (x) => `${x} கிடைத்தது.`, now: 'இப்போது', ask: (x) => `இது ${x} ஆ?`,
-    turn: (o, d) => `${['', 'முதல்', 'இரண்டாவது', 'மூன்றாவது', 'நான்காவது'][o] || o} தெருவில் ${d} திரும்புங்கள்.`,
-    turned: 'திரும்பிவிட்டீர்கள்.', arrived: (f) => `நீங்கள் வந்துவிட்டீர்கள்.${f != null ? ` மாடி ${f}.` : ''}`,
-    left: 'இடது பக்கம்', right: 'வலது பக்கம்', dest: 'இடம்',
+    intro: 'சரி, இந்த ரூட்ல போலாம்.', straight: 'முதல்ல நேரா போங்க.',
+    look: (x) => `${x} வருதான்னு பாருங்க.`, spotted: (x) => `ஆமா, கரெக்ட்! ${x} வந்துடுச்சு.`, ask: (x) => `இது தான் ${x}-ஆ?`,
+    turn: (o, d) => `${['', 'முதல்', 'ரெண்டாவது', 'மூணாவது', 'நாலாவது'][o] || o} தெருவுல ${d} திரும்புங்க.`,
+    turned: 'சூப்பர், திரும்பிட்டீங்க.', arrived: (f) => `வந்துட்டீங்க! இதுதான் வீடு.${f != null ? ` ${f === 0 ? 'கீழ் தளம்' : `${f}வது மாடி`}.` : ''}`,
+    now: 'இப்போ', left: 'லெஃப்ட்', right: 'ரைட்', dest: 'இடம்',
+  },
+  kn: {
+    intro: 'ಸರಿ, ಹೋಗೋಣ.', straight: 'ಮೊದಲು ನೇರವಾಗಿ ಹೋಗಿ.',
+    look: (x) => `${x} ನೋಡ್ತಾ ಇರಿ.`, spotted: (x) => `ಹೌದು, ಸರಿ! ${x} ಬಂತು.`, ask: (x) => `ಇದೇನಾ ${x}?`,
+    turn: (o, d) => `${['', 'ಮೊದಲ', 'ಎರಡನೇ', 'ಮೂರನೇ', 'ನಾಲ್ಕನೇ'][o] || o} ರಸ್ತೇಲಿ ${d} ತಿರುಗಿ.`,
+    turned: 'ಸೂಪರ್, ತಿರುಗಿದ್ರಿ.', arrived: (f) => `ಬಂದ್ಬಿಟ್ರಿ! ಇದೇ ಮನೆ.${f != null ? ` ${f === 0 ? 'ನೆಲ ಮಹಡಿ' : `${f}ನೇ ಮಹಡಿ`}.` : ''}`,
+    now: 'ಈಗ', left: 'ಎಡಕ್ಕೆ', right: 'ಬಲಕ್ಕೆ', dest: 'ಸ್ಥಳ',
+  },
+  ml: {
+    intro: 'ശരി, പോകാം.', straight: 'ആദ്യം നേരെ പോകൂ.',
+    look: (x) => `${x} നോക്കിക്കോളൂ.`, spotted: (x) => `അതെ, ശരിയാണ്! ${x} എത്തി.`, ask: (x) => `ഇതാണോ ${x}?`,
+    turn: (o, d) => `${['', 'ഒന്നാമത്തെ', 'രണ്ടാമത്തെ', 'മൂന്നാമത്തെ', 'നാലാമത്തെ'][o] || o} റോഡിൽ ${d} തിരിയൂ.`,
+    turned: 'കൊള്ളാം, തിരിഞ്ഞു.', arrived: (f) => `എത്തി! ഇതാണ് വീട്.${f != null ? ` ${f === 0 ? 'താഴത്തെ നില' : `${f}-ാം നില`}.` : ''}`,
+    now: 'ഇനി', left: 'ഇടത്തോട്ട്', right: 'വലത്തോട്ട്', dest: 'സ്ഥലം',
   },
 };
 
@@ -121,4 +134,23 @@ export class TurnDetector {
     this.since ??= now;
     if (now - this.since >= 700) { this.onTurn(); this.onTurn = () => {}; }
   }
+}
+
+// Landmark words in the rider's language, so a Tamil sentence says "நீல கேட்", not "blue gate".
+const LOCAL = {
+  hi: { temple: 'मंदिर', pharmacy: 'मेडिकल', gate: 'गेट', house: 'घर', store: 'दुकान', bus_stop: 'बस स्टॉप', school: 'स्कूल', hospital: 'अस्पताल', bank: 'बैंक', petrol: 'पेट्रोल पंप', park: 'पार्क', mosque: 'मस्जिद', church: 'चर्च', apartment: 'अपार्टमेंट',
+    blue: 'नीला', red: 'लाल', green: 'हरा', yellow: 'पीला', white: 'सफ़ेद', black: 'काला', orange: 'नारंगी', pink: 'गुलाबी', brown: 'भूरा', grey: 'स्लेटी' },
+  ta: { temple: 'கோவில்', pharmacy: 'மெடிக்கல்', gate: 'கேட்', house: 'வீடு', store: 'கடை', bus_stop: 'பஸ் ஸ்டாப்', school: 'ஸ்கூல்', hospital: 'ஆஸ்பத்திரி', bank: 'பேங்க்', petrol: 'பெட்ரோல் பங்க்', park: 'பார்க்', mosque: 'மசூதி', church: 'சர்ச்', apartment: 'அபார்ட்மென்ட்',
+    blue: 'நீல', red: 'சிவப்பு', green: 'பச்சை', yellow: 'மஞ்சள்', white: 'வெள்ளை', black: 'கருப்பு', orange: 'ஆரஞ்சு', pink: 'பிங்க்', brown: 'பிரவுன்', grey: 'சாம்பல்' },
+  kn: { temple: 'ದೇವಸ್ಥಾನ', pharmacy: 'ಮೆಡಿಕಲ್', gate: 'ಗೇಟ್', house: 'ಮನೆ', store: 'ಅಂಗಡಿ', bus_stop: 'ಬಸ್ ಸ್ಟಾಪ್', school: 'ಶಾಲೆ', hospital: 'ಆಸ್ಪತ್ರೆ', bank: 'ಬ್ಯಾಂಕ್', petrol: 'ಪೆಟ್ರೋಲ್ ಬಂಕ್', park: 'ಪಾರ್ಕ್', mosque: 'ಮಸೀದಿ', church: 'ಚರ್ಚ್', apartment: 'ಅಪಾರ್ಟ್‌ಮೆಂಟ್',
+    blue: 'ನೀಲಿ', red: 'ಕೆಂಪು', green: 'ಹಸಿರು', yellow: 'ಹಳದಿ', white: 'ಬಿಳಿ', black: 'ಕಪ್ಪು', orange: 'ಕಿತ್ತಳೆ', pink: 'ಗುಲಾಬಿ', brown: 'ಕಂದು', grey: 'ಬೂದು' },
+  ml: { temple: 'ക്ഷേത്രം', pharmacy: 'മെഡിക്കൽ', gate: 'ഗേറ്റ്', house: 'വീട്', store: 'കട', bus_stop: 'ബസ് സ്റ്റോപ്പ്', school: 'സ്കൂൾ', hospital: 'ആശുപത്രി', bank: 'ബാങ്ക്', petrol: 'പെട്രോൾ പമ്പ്', park: 'പാർക്ക്', mosque: 'പള്ളി', church: 'പള്ളി', apartment: 'അപ്പാർട്ട്മെന്റ്',
+    blue: 'നീല', red: 'ചുവന്ന', green: 'പച്ച', yellow: 'മഞ്ഞ', white: 'വെള്ള', black: 'കറുത്ത', orange: 'ഓറഞ്ച്', pink: 'പിങ്ക്', brown: 'തവിട്ട്', grey: 'ചാര' },
+};
+
+export function localName(lm, lang = 'en') {
+  if (!lm) return text(lang).dest;
+  const L = LOCAL[lang] || {};
+  const type = lm.type === 'other' || (lm.name && (lm.type === 'sign' || lm.type === 'desk')) ? '' : L[lm.type] || lm.type.replace('_', ' ');
+  return [lm.colour ? L[lm.colour] || lm.colour : '', lm.name, type].filter(Boolean).join(' ');
 }
