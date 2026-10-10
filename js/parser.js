@@ -10,7 +10,7 @@ const set = (...lists) => new Set(lists.flatMap(W));
 
 const LEFT = set('left baayen baayein bayen baaye baye baen baayan baya baayi edakke edakkey edagade edakke idathu idadhu idadu idathu', 'बाएं बायें बाएँ बाये ಎಡಕ್ಕೆ ಎಡಗಡೆ இடது இடதுபுறம்');
 const RIGHT = set('right daayen daayein dayen daaye daye daen daahine dahine balakke balakkey balagade valathu valadhu valadu', 'दाएं दायें दाएँ दाये ಬಲಕ್ಕೆ ಬಲಗಡೆ வலது வலதுபுறம்');
-const STRAIGHT = set('straight seedha seedhe sidha sidhe nera nere neraga', 'सीधा सीधे ನೇರ நேரா');
+const STRAIGHT = set('straight straightah straighta straightaa seedha seedhe sidha sidhe nera nere neraga nerah neraa', 'सीधा सीधे ನೇರ நேரா');
 const PASS = set('past after baad datti dati daati thandi thaandi tandi paar crossing', 'बाद पार ದಾಟಿ தாண்டி');
 const ROAD = { lane: 'lane', gali: 'lane', galli: 'lane', गली: 'lane', cross: 'cross', road: 'road', rasta: 'road', raasta: 'road', street: 'street', theru: 'street', therு: 'street', தெரு: 'street', beedi: 'street', ರಸ್ತೆ: 'road', turn: 'turn', mod: 'turn', main: 'main' };
 const ORD = {
@@ -70,6 +70,12 @@ const HONORIFIC = set('sri shri shree sree');
 const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road see look find dekho dekhiye dekh nodi paaru paarunga area place');
 // Generic words that are never a landmark's proper name.
 export const GENERIC = set('main road cross street lane gali area place side corner medical shop store building the');
+// Turn verbs that follow "left/right" in code-mixed speech ("left cut pannu", "right lo", "baayen mudo").
+const TURN_TAILS = 'cut|turn|take|pannu|panni|pannunga|edu|edunga|mudo|mudiye|mud|lo|le|lijiye|thirumbu|thirumbunga|tirugi|thirugi|ho|hogi|po|poi|ponga';
+const TURN_WORD = '(?:left|right|baayen|baaye|bayen|daayen|daaye|dayen|edakke|balakke|idathu|valathu|idathottu|valathottu)';
+// Split after every turn (and its verb: "left cut pannu", "right lo") so one breath with two turns gives two steps.
+const TURN_SPLIT = new RegExp(String.raw`(?<=\b${TURN_WORD}\b(?:\s+(?:${TURN_TAILS}))*)\s+(?!(?:${TURN_TAILS})\b)`, 'i');
+
 const SPLIT = /[.,;!?\n।]+|\b(?:then|and then|after that|uske baad|iske baad|phir|fir|amele|aamele|aamel|appuram|apparam|apram|piragu|aprm)\b/i;
 
 const LANG_HINTS = {
@@ -104,6 +110,7 @@ const VERBS = set(`walk walking go going come coming take turn turning see look 
   is are was its thats there will you your our we us they then before until till up down inside outside towards toward into onto
   ok okay so get got stand standing wait waiting stop stopped near nearby beside front back side way spot place point location
   hello hey please thanks thank bro sir madam bhaiya anna boss dear just also very big small new old first last
+  cut pannu panni pannunga po poi ponga poitu vaa vaanga edu edunga ah dhaan than romba konjam
   lo le lena lijiye khade khada khadi milenge milega hoon hun aao aaiye aana jao jaiye jana chalo chaliye mudo mudiye mud ruko dekho hai hain ho hoga raha rahe wahan yahan udhar idhar aur bas
   banni baa hogi hogu nodi tirugi thirugi illi ide alli vaanga vanga ponga poi thirumbu thirumbunga paarunga irukku iruku inge ange`);
 
@@ -258,7 +265,8 @@ export function parseRules(input) {
   const graph = { floor: null, lang: detectLang(text), parser: 'rules', steps: [] };
   const push = (s) => graph.steps.push(s);
 
-  for (const clause of text.split(SPLIT).filter((c) => c && c.trim())) {
+  const clauses = text.split(SPLIT).filter((c) => c && c.trim()).flatMap((c) => c.split(TURN_SPLIT));
+  for (const clause of clauses.filter((c) => c && c.trim())) {
     const a = analyse(clause);
     if (a.floor !== undefined) graph.floor = a.floor;
     const lms = a.landmarks;

@@ -40,6 +40,9 @@ function toWav16k(chunks, rate, lastSeconds = MAX_S) {
 // Vocabulary hints per language: steer recognition towards direction words (Whisper "initial prompt").
 export const SPEECH_LANGS = {
   auto: { label: 'Auto', prompt: '' },
+  // Code-mixed speech, written in Latin letters (how most people actually give directions).
+  tanglish: { label: 'Tanglish', code: 'en', prompt: 'Straight-ah po, left cut pannu, right cut pannu, rendavathu theru, kovil thandi, medical kadai ethire, neela gate veedu, second floor.' },
+  hinglish: { label: 'Hinglish', code: 'en', prompt: 'Seedha aao, left lo, right mudo, doosri gali, mandir ke baad, medical ke saamne, neela gate wala ghar, doosri manzil.' },
   en: { label: 'English', prompt: 'Directions: go straight, turn left, turn right, second lane, temple, pharmacy, blue gate, opposite, next to.' },
   hi: { label: 'हिन्दी', prompt: 'रास्ता: सीधा आइए, बाएं मुड़िए, दाएं मुड़िए, दूसरी गली, मंदिर, नीला गेट, सामने, बगल में.' },
   ta: { label: 'தமிழ்', prompt: 'வழி: நேராக வாங்க, இடது பக்கம் திரும்புங்க, வலது பக்கம், இரண்டாவது தெரு, கோவில், நீல கேட், எதிரே.' },
@@ -53,7 +56,7 @@ async function transcribe(wav, translate, ms = 20000, url = URL_STT, lang = 'aut
   f.append('temperature', '0');
   f.append('response_format', 'json');
   if (translate) f.append('translate', 'true');
-  f.append('language', SPEECH_LANGS[lang] ? lang : 'auto'); // a known language beats auto-detect on short clips
+  f.append('language', SPEECH_LANGS[lang] ? SPEECH_LANGS[lang].code || lang : 'auto'); // a known language beats auto-detect
   if (SPEECH_LANGS[lang]?.prompt) f.append('prompt', SPEECH_LANGS[lang].prompt);
   const r = await fetch(url, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error(`speech server ${r.status}`);
@@ -127,7 +130,7 @@ export function listen({ canvas, onPartial, onState, getLang = () => 'auto' } = 
     const lang = getLang();
     // Original words (for the screen) and English (for the parser); English input needs only one pass.
     try {
-      if (lang === 'en') english = await transcribe(wav, false, 20000, URL_STT, lang);
+      if ((SPEECH_LANGS[lang]?.code || lang) === 'en') english = await transcribe(wav, false, 20000, URL_STT, lang); // already Latin text
       else { english = await transcribe(wav, true, 20000, URL_STT, lang); original = (await transcribe(wav, false, 20000, URL_STT, lang).catch(() => original)) || original; }
     } catch (e) { if (!original) throw e; }
     return { text: english || original, original, ms: Math.round(performance.now() - t0) };
