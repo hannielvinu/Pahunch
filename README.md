@@ -21,7 +21,7 @@ Then open `http://localhost:8080` in Chrome (localhost is a secure context, so c
 ## Third-party (open source, unmodified)
 Tesseract.js 5.1.1 + tesseract.js-core (Apache-2.0), tessdata_fast eng/hin/kan/tam (Apache-2.0).
 qrcode-generator 1.4.4 by Kazuhiko Arase (MIT), in `lib/qrcode/`.
-MediaPipe Tasks Vision 1.1.0 (Apache-2.0) with the EfficientDet-Lite0 int8 object detector (Apache-2.0), in `lib/mediapipe/`, `lib/detector/`.
+MediaPipe Tasks Vision 1.1.0 (Apache-2.0) with the EfficientDet-Lite0 int8 object detector and the EfficientNet-Lite0 int8 image classifier (Apache-2.0), in `lib/mediapipe/`, `lib/detector/`.
 transformers.js 3.8.1 (Apache-2.0, bundles onnxruntime-web, MIT). Inter and Plus Jakarta Sans typefaces (SIL OFL 1.1), in `lib/fonts/`.
 On-device LLM: Qwen2.5-1.5B-Instruct GGUF (Apache-2.0) via llama.cpp (MIT), installed in Termux.
 

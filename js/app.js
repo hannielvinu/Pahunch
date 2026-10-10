@@ -6,6 +6,7 @@ import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
 import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
 import { Detector } from './detector.js';
+import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
@@ -22,6 +23,7 @@ const overlay = new Overlay($('#overlay'), $('#video'));
 const compass = new Compass();
 compass.start();
 const detector = new Detector($('#video'));
+const scene = new Scene($('#video'));
 const sensors = new Sensors();
 sensors.start();
 const MODES = {
@@ -382,6 +384,25 @@ function onDetections(dets) {
   return { label: hit.label, text: label };
 }
 
+// Appearance agrees with the step's landmark type ("looks like a temple") in two readings in a row:
+// a medium-strength cue, so it asks (ambulance mode confirms). Signboards stay the strong cue.
+function onScene(tags) {
+  const chip = $('#scene-chip');
+  const top = tags[0];
+  chip.hidden = !top || top.score < 0.15;
+  if (top) chip.textContent = `Looks like: ${top.tag} ${Math.round(top.score * 100)}%`;
+  const s = step();
+  const want = s && s.kind !== 'turn' ? TYPE_TAG[s.landmark?.type] : null;
+  const hit = want && tags.find((t) => t.tag === want && t.score >= 0.2);
+  chip.classList.toggle('good', !!hit);
+  state.sceneHits = hit ? (state.sceneHits || 0) + 1 : 0;
+  if (state.sceneHits < 2 || state.asking) return;
+  state.sceneHits = 0;
+  if (ambulance()) return confirmStep(T().spotted(spokenName(s.landmark)));
+  if (s.kind === 'arrive') { state.colourSeenAt ||= performance.now(); decideArrive(); }
+  ask(spokenName(s.landmark));
+}
+
 // Object detection on the live camera (MediaPipe), throttled so OCR keeps its share of the phone.
 function detectLoop() {
   if (!state.running) return;
@@ -389,6 +410,8 @@ function detectLoop() {
   try {
     const dets = detector.detect();
     overlay.setDetections(dets, onDetections(dets));
+    // Appearance (what kind of place) every ~5th frame: lighter than detection, changes slowly.
+    if (scene.ready && (state.sceneTick = (state.sceneTick || 0) + 1) % 5 === 0) onScene(scene.classify());
     if (detector.ready) $('#det-ms').textContent = `vision ${detector.ms} ms · ${detector.delegate}`;
   } catch (e) { console.warn(e); }
   state.detTimer = setTimeout(detectLoop, Math.max(60, 140 - (performance.now() - t0)));
@@ -413,6 +436,7 @@ async function startGuide() {
   announce();
   ocrLoop();
   tick();
+  if (!LITE && !scene.ready) scene.load().catch(() => {});
   if (LITE) {} else if (!detector.ready) detector.load().then(detectLoop).catch((e) => ($('#det-ms').textContent = `vision off: ${e.message}`));
   else detectLoop();
   if (ambulance()) navigator.vibrate?.([200, 100, 200, 100, 200]);
@@ -680,7 +704,7 @@ async function boot() {
   const mark = (k, ok, note) => { const li = document.querySelector(`#boot [data-k="${k}"]`); li.classList.add(ok ? 'ok' : 'skip'); if (note) li.insertAdjacentHTML('beforeend', `<em>${note}</em>`); };
   const t0 = performance.now();
   const jobs = LITE ? ['camera', 'ocr', 'llm', 'sensors'].map((k) => Promise.resolve(mark(k, true, 'preview'))) : [
-    detector.load().then(() => mark('camera', true, `EfficientDet · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
+    Promise.all([detector.load(), scene.load().catch(() => null)]).then(() => mark('camera', true, `objects + places · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
     new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · 4 languages'), () => mark('ocr', false, 'failed')),
     warmNative().then((up) => mark('llm', up, up ? 'Qwen2.5 · llama.cpp' : 'rules only (start.sh)')),
     new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
