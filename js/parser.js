@@ -5,6 +5,8 @@
 // { floor, lang, parser:'rules', steps:[{ n, kind:'pass'|'turn'|'arrive', landmark?, turn?, ordinal?, road?,
 //   ref?:{relation, landmark}, verify:{ signs, alt, colour, compass, confidence } }] }
 
+import { normaliseNative } from './native.js';
+
 const W = (s) => s.split(/\s+/).filter(Boolean);
 const set = (...lists) => new Set(lists.flatMap(W));
 
@@ -88,7 +90,7 @@ const LANG_HINTS = {
 };
 
 function normalise(text) {
-  return text.replace(/[’']/g, '').replace(/(\d)\s*(st|nd|rd|th)\b/gi, '$1$2').replace(/\s+/g, ' ').trim();
+  return normaliseNative(text).replace(/[’']/g, '').replace(/(\d)\s*(st|nd|rd|th)\b/gi, '$1$2').replace(/\s+/g, ' ').trim();
 }
 
 function tokens(clause) {
@@ -96,6 +98,7 @@ function tokens(clause) {
 }
 
 function detectLang(text) {
+  if (/[ഀ-ൿ]/.test(text)) return 'ml';
   if (/[ऀ-ॿ]/.test(text)) return 'hi';
   if (/[ಀ-೿]/.test(text)) return 'kn';
   if (/[஀-௿]/.test(text)) return 'ta';
@@ -138,7 +141,7 @@ function nameBefore(toks, i) {
   for (let j = i - 1; j >= 0 && name.length < 3; j--) {
     const { raw, w } = toks[j];
     if (HONORIFIC.has(w)) continue;
-    if (STOP.has(w) || VERBS.has(w) || isLexical(w) || !/^[\p{L}\d&]+$/u.test(raw)) break;
+    if (STOP.has(w) || VERBS.has(w) || isLexical(w) || !/^[\p{L}\p{M}\d&]+$/u.test(raw)) break;
     name.unshift(raw);
   }
   return name.join(' ') || null;
@@ -192,7 +195,7 @@ function findLandmarks(toks) {
     for (let j = lm.i - 1; j >= Math.max(0, lm.i - 4); j--) if (nameWords.has(toks[j].w) || HONORIFIC.has(toks[j].w)) used.add(j);
   }
   const hint = (w) => Object.values(LANG_HINTS).some((s) => s.has(w));
-  const content = (j) => !used.has(j) && /^\p{L}{3,}$/u.test(toks[j].raw) && !STOP.has(toks[j].w) && !isLexical(toks[j].w) &&
+  const content = (j) => !used.has(j) && /^[\p{L}\p{M}]{3,}$/u.test(toks[j].raw) && !STOP.has(toks[j].w) && !isLexical(toks[j].w) &&
     !VERBS.has(toks[j].w) && !HONORIFIC.has(toks[j].w) && !WALA.has(toks[j].w) && !hint(toks[j].w);
   for (let j = 0; j < toks.length; j++) {
     if (!content(j)) continue;
@@ -275,7 +278,7 @@ export function verifyFor(step) {
   const lm = step.landmark;
   if (step.kind === 'turn') return { signs: [], alt: [], colour: null, objects: [], compass: step.turn, confidence: 'medium' };
   const target = lm?.name ? lm : step.ref?.landmark?.name ? step.ref.landmark : lm;
-  const signs = target?.name ? W(target.name.toUpperCase().replace(/[^\p{L}\d ]/gu, ' ')).filter((w) => w.length >= 3) : [];
+  const signs = target?.name ? W(target.name.toUpperCase().replace(/[^\p{L}\p{M}\d ]/gu, ' ')).filter((w) => w.length >= 3) : [];
   const alt = target ? W(LANDMARKS[target.type]?.[1] || '') : [];
   const colour = lm?.colour || null;
   const words = [...W((lm?.name || '').toLowerCase()), lm?.type === 'desk' ? 'table' : ''];
@@ -286,7 +289,7 @@ export function verifyFor(step) {
 
 export function parseRules(input) {
   const text = normalise(input);
-  const graph = { floor: null, lang: detectLang(text), parser: 'rules', steps: [] };
+  const graph = { floor: null, lang: detectLang(input), parser: 'rules', steps: [] };
   const push = (s) => graph.steps.push(s);
 
   const clauses = text.split(SPLIT).filter((c) => c && c.trim()).flatMap((c) => c.split(TURN_SPLIT));

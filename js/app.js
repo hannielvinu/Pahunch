@@ -1,6 +1,6 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe } from './parser.js';
-import { parseNote, warmNative } from './llm.js';
+import { parseNote, warmNative, complete } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
@@ -52,6 +52,8 @@ for (const [lang, note] of Object.entries(SAMPLES)) {
   $('#samples').append(b);
 }
 
+$('#note').addEventListener('input', () => { state.altNote = null; state.spokenLang = null; });
+
 $('#paste').onclick = async () => {
   try {
     const t = await navigator.clipboard.readText();
@@ -80,6 +82,11 @@ $('#parse').onclick = async () => {
   });
   btn.disabled = false;
   box.hidden = true;
+  // If the native-script reading is incomplete, try the English translation of the same speech.
+  if (state.altNote && !complete(res.rules || res.graph)) {
+    const alt = await parseNote(state.altNote, { mode: 'rules' });
+    if (complete(alt.graph)) Object.assign(res, alt, { stats: null, fallback: null });
+  }
   const g0 = res.graph;
   if (g0.parser === 'rules' && !g0.steps.some((s) => s.kind === 'turn' || s.landmark)) {
     // Nothing route-like in the note (e.g. "Hi"): don't show an empty plan.
@@ -548,9 +555,12 @@ $('#mic').onclick = async () => {
       micStop = rec.stop;
       const r = await rec.done;
       if (r.text) {
-        $('#note').value = r.text;
+        // Native-language speech: plan from the speaker's own words (no translation errors); keep English as backup.
+        const native = ['hi', 'ta', 'kn', 'ml'].includes(speechLang) && r.original;
+        $('#note').value = native ? r.original : r.text;
+        state.altNote = native ? r.text : null;
         state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
-        if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
+        if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = native ? `English: "${r.text}" · on this phone in ${(r.ms / 1000).toFixed(1)} s` : `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
         else status.hidden = true;
       } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
     } else {
