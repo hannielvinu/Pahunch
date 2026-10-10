@@ -24,6 +24,7 @@ NAME=ggml-small-q5_1.bin
 [ "${1:-}" = "base" ] && NAME=ggml-base.bin
 mkdir -p models/whisper
 for N in "$NAME" ggml-base.bin; do  # base also powers the fast live transcript
+  [ -s "models/whisper/$N" ] && [ "$(stat -c %s "models/whisper/$N")" -gt 50000000 ] && { echo "have $N"; continue; }
   until curl -fL --retry 10 --retry-delay 5 -C - -o "models/whisper/$N" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$N"; do echo "retrying in 5 s…"; sleep 5; done
 done
 ls -la models/whisper
