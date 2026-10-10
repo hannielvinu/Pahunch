@@ -490,3 +490,27 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
 }
 
 export { describe };
+
+// ---------- Translation (Call mode captions in the rider's language), same on-device model ----------
+const LANG_NAME = { en: 'English', hi: 'Hindi', ta: 'Tamil', kn: 'Kannada', ml: 'Malayalam', bn: 'Bengali' };
+
+// -> translated text, or null if the on-device model is not running / fails (captions still show the original).
+export async function translateLine(text, lang) {
+  if (!text || !LANG_NAME[lang]) return null;
+  try {
+    const r = await fetch(`${NATIVE_URL}/v1/chat/completions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000),
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: `Translate what the customer says into simple ${LANG_NAME[lang]} for a delivery rider. Keep shop, temple and street names as they are. Output only the translation, one line.` },
+          { role: 'user', content: text },
+        ],
+        temperature: 0, max_tokens: 140, cache_prompt: true, chat_template_kwargs: { enable_thinking: false },
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const out = (j.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').split('\n').map((l) => l.trim()).find(Boolean);
+    return out || null;
+  } catch { return null; }
+}

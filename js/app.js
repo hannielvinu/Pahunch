@@ -1,6 +1,6 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords } from './parser.js';
-import { parseNote, warmNative, complete, agrees } from './llm.js';
+import { parseNote, warmNative, complete, agrees, translateLine } from './llm.js';
 import { Vision, matchSigns, ocrLangs } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
@@ -34,7 +34,7 @@ const MODES = {
 const ambulance = () => document.body.dataset.mode === 'ambulance';
 
 // ---------- Router ----------
-const screens = ['roles', 'home', 'plan', 'guide', 'arrive'];
+const screens = ['roles', 'home', 'call', 'plan', 'guide', 'arrive'];
 function show(name) {
   for (const s of screens) $(`#${s}`).hidden = s !== name;
   if (name !== 'guide') stopGuide();
@@ -650,7 +650,8 @@ function netChip({ requests, bytes, hosts } = startNetMeter.total || {}) {
   const chip = $('#net');
   chip.onclick = () => { const u = startNetMeter.total?.urls || []; toast(requests ? `Left the phone: ${u.join('  |  ') || [...hosts].join(', ')}` : 'Nothing has left this phone.', 12000); };
   chip.classList.toggle('off', requests > 0);
-  chip.textContent = requests ? `${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : `On-device · 0 B sent${blocked.length ? ` · ${blocked.length} blocked` : ''}`;
+  chip.textContent = requests ? `${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : `${state.speechCloud ? 'App data 0 B · speech via Google (online)' : 'On-device · 0 B sent'}${blocked.length ? ` · ${blocked.length} blocked` : ''}`;
+  chip.classList.toggle('cloud', !!state.speechCloud && !requests);
   if (!requests && blocked.length) chip.onclick = () => toast(`Blocked from leaving the phone: ${blocked.join('  |  ')}`, 12000);
 }
 startNetMeter(netChip);
@@ -818,6 +819,86 @@ $('#engine-toggle').onclick = () => {
   engineLabel();
 };
 setTimeout(engineLabel, 0);
+
+// ---------- Call mode: the customer's call on speaker -> live captions in the rider's language -> route ----------
+// Android does not let apps record phone calls, so the microphone listens to the speakerphone. Each finished
+// sentence becomes a caption; if the rider reads another language, the on-device model translates it underneath.
+// "Make the route" sends the whole conversation through the same understanding as a typed note.
+const call = { on: false, lines: [], stop: null, queue: Promise.resolve() };
+const callFrom = () => $('#call-from').value, callTo = () => $('#call-to').value;
+const baseLang = (l) => ({ tanglish: 'ta', hinglish: 'hi', auto: null }[l] ?? l);
+function speechBadge(cloud) {
+  state.speechCloud = cloud;
+  $('#call-speech').textContent = cloud ? 'Speech: Google (online)' : 'Speech: on this phone';
+  $('#call-speech').classList.toggle('cloud', cloud);
+  netChip();
+}
+function renderCaptions() {
+  const box = $('#captions');
+  if (!call.lines.length) return;
+  box.replaceChildren(...call.lines.map((l) => {
+    const p = el('div', 'cap');
+    p.append(el('p', 'cap-orig', l.text));
+    if (l.tr) p.append(el('p', 'cap-tr', l.tr));
+    else if (l.translating) p.append(el('p', 'cap-tr dim', 'translating…'));
+    return p;
+  }));
+  box.scrollTop = box.scrollHeight;
+  $('#call-route').disabled = !call.lines.length;
+}
+function addCaption(text) {
+  const line = { text, tr: null, translating: false };
+  call.lines.push(line);
+  const from = baseLang(callFrom()), to = callTo();
+  if (to && to !== from && !(to === 'en' && !from)) {
+    line.translating = true;
+    call.queue = call.queue.then(async () => { line.tr = await translateLine(text, to); line.translating = false; renderCaptions(); });
+  }
+  renderCaptions();
+  navigator.vibrate?.(40);
+}
+async function callLoop() {
+  while (call.on) {
+    let heard = '';
+    try {
+      if (voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || onDeviceNow())) {
+        speechBadge(navigator.onLine && !onDeviceNow());
+        const p = dictate(callFrom(), (t) => ($('#call-live').textContent = t), null, { local: onDeviceNow() });
+        call.stop = () => dictate.stop?.();
+        heard = await p;
+      } else if (await sttAvailable()) {
+        speechBadge(false);
+        const rec = listen({ onPartial: (t) => ($('#call-live').textContent = t), getLang: () => callFrom() });
+        call.stop = rec.stop;
+        const r = await rec.done;
+        heard = r.original || r.text;
+      } else { toast('No speech engine available: type the directions instead.'); break; }
+    } catch (e) {
+      if (!['no-speech', 'aborted'].includes(e?.code) && !/no speech/i.test(e?.message || '')) { toast(`Speech: ${e.message}`); await new Promise((r) => setTimeout(r, 800)); }
+    }
+    $('#call-live').textContent = '';
+    if (heard) addCaption(heard);
+  }
+}
+function setListening(on) {
+  call.on = on;
+  $('#call-listen').textContent = on ? 'Stop listening' : 'Start listening';
+  $('#call-listen').classList.toggle('live', on);
+  if (on) { unlockSpeech(); callLoop(); } else { call.stop?.(); $('#call-live').textContent = ''; }
+}
+$('#callmode').onclick = () => { show('call'); speechBadge(navigator.onLine && voiceAvailable && speechEngine !== 'whisper' && !onDeviceNow()); renderCaptions(); };
+$('#call-back').onclick = () => { setListening(false); show('home'); };
+$('#call-listen').onclick = () => setListening(!call.on);
+$('#call-route').onclick = async () => {
+  setListening(false);
+  await call.queue;
+  $('#note').value = call.lines.map((l) => l.text).join('. ');
+  state.altNote = call.lines.every((l) => l.tr) && callTo() === 'en' ? call.lines.map((l) => l.tr).join('. ') : null;
+  state.spokenLang = callTo(); // guidance spoken / shown in the rider's language
+  state.lastVoice = { at: new Date().toLocaleTimeString(), chip: `call:${callFrom()}`, heard: $('#note').value, english: '', ms: 0 };
+  show('home');
+  $('#parse').click();
+};
 
 // ---------- Field test: with vs without Pahunch ----------
 // "Without" runs are timed here (description + calls); "with" runs come from door cards (time to door).

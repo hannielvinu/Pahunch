@@ -276,3 +276,22 @@ body:not(.dev) .dev-only { display: none !important; }
 /* Startup watchdog message on the splash */
 .boot-fail { margin-top: 18px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
 .boot-fail p { margin: 0; }
+
+/* Call mode */
+.callcard { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; padding: 14px 16px; border-radius: 16px; border: 1.5px solid color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, #fff); color: var(--text); box-shadow: var(--shadow); }
+.callcard .ico { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--accent); color: #fff; flex: none; }
+.callcard strong { display: block; font: 750 16px Jakarta, Inter, sans-serif; }
+.callcard em { font-style: normal; color: var(--dim); font-size: 13px; }
+.consent { margin: 0; padding: 10px 12px; border-radius: 12px; background: #fff7e6; color: #7a4b00; font-size: 13px; line-height: 1.45; }
+.call-langs { flex-wrap: nowrap; gap: 10px; }
+.call-langs label { flex: 1; display: flex; flex-direction: column; gap: 4px; font: 600 12px Inter, sans-serif; color: var(--dim); }
+.call-langs select { width: 100%; }
+.captions { flex: 1; min-height: 38vh; max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.cap-empty { color: var(--dim); margin: auto; text-align: center; }
+.cap { padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.cap-orig { margin: 0; font: 600 18px/1.4 Inter, sans-serif; overflow-wrap: anywhere; }
+.cap-tr { margin: 6px 0 0; font: 700 20px/1.4 Jakarta, Inter, sans-serif; color: var(--accent); overflow-wrap: anywhere; }
+.cap-tr.dim { color: var(--dim); font-weight: 500; font-size: 14px; }
+.call-live { min-height: 1.4em; margin: 0; color: var(--dim); font-style: italic; overflow-wrap: anywhere; }
+#call-listen.live { animation: live 1s ease-in-out infinite; }
+.mode-badge.cloud, .net-chip.cloud { background: #fff7e6; color: #9a5b00; border-color: #fcd9a0; }

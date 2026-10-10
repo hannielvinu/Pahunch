@@ -113,6 +113,10 @@
       <button id="kbd-plan" class="btn primary">Plan</button>
     </div>
     <p id="mic-status" class="meta" hidden></p>
+    <button id="callmode" class="callcard">
+      <span class="ico"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></span>
+      <span><strong>Customer on the phone? Call mode</strong><em>Put the call on speaker: live captions in your language, then the route</em></span>
+    </button>
     <button id="stepmode" class="link">Speak step by step</button>
     <div class="row" hidden>
       <button id="paste" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg>Paste from laptop</button>
@@ -163,6 +167,21 @@
     <button id="demo" class="link dev-only">Load demo route</button>
     <a href="partner.html" class="link partner-link">Open the partner app demo (rider · customer · 108)</a>
     <div id="samples" hidden></div>
+  </section>
+
+  <section id="call" class="screen call" hidden>
+    <header class="topbar"><button id="call-back" class="back" aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><strong>Call mode</strong><span id="call-speech" class="mode-badge">speech</span></header>
+    <p class="consent">Put the call on <b>speaker</b> and tell the customer: <i>"I'm using a captioning assistant to find your door."</i> Nothing is recorded or saved except the route.</p>
+    <div class="row call-langs">
+      <label>Customer speaks<select id="call-from"><option value="auto">Auto</option><option value="en">English</option><option value="hi">हिन्दी Hindi</option><option value="ta" selected>தமிழ் Tamil</option><option value="kn">ಕನ್ನಡ Kannada</option><option value="ml">മലയാളം Malayalam</option><option value="bn">বাংলা Bengali</option><option value="tanglish">Tanglish</option><option value="hinglish">Hinglish</option></select></label>
+      <label>Show me in<select id="call-to"><option value="en">English</option><option value="hi" selected>हिन्दी Hindi</option><option value="ta">தமிழ் Tamil</option><option value="kn">ಕನ್ನಡ Kannada</option><option value="ml">മലയാളം Malayalam</option><option value="bn">বাংলা Bengali</option></select></label>
+    </div>
+    <div id="captions" class="captions" aria-live="polite"><p class="cap-empty">Captions appear here as the customer speaks.</p></div>
+    <p id="call-live" class="call-live"></p>
+    <div class="row erow">
+      <button id="call-listen" class="btn primary big">Start listening</button>
+    </div>
+    <button id="call-route" class="btn ghost big" disabled>Make the route from this call</button>
   </section>
 
   <section id="plan" class="screen" hidden>
