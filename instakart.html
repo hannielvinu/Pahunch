@@ -187,58 +187,106 @@
     }
 
     // Voice directions: recorded with the microphone only (works offline). The rider's phone turns them into a route.
-    // Her words, live, in the language she chose (Chrome speech recognition; online at order time).
+    // Her words, live, in the language she chose, while she records her voice note.
+    // Phones differ: some let the page record and recognise from the same microphone, others give the microphone to
+    // only one of them. So words come first: recognition is fed the recording's own audio track where the browser
+    // supports it; if no words arrive within a few seconds, the voice recording stops and recognition gets the
+    // microphone alone (she is asked to say it once more). Her checked words are what the rider's route is built from.
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const LOCALE = { ta: 'ta-IN', hi: 'hi-IN', kn: 'kn-IN', ml: 'ml-IN', bn: 'bn-IN', en: 'en-IN', tanglish: 'ta-IN', hinglish: 'hi-IN' };
-    let recog = null, finalWords = '';
-    function startWords() {
-      if (!SR) { $('#words-src').textContent = 'This browser cannot show your words: please type them.'; return; }
-      finalWords = $('#words').value.trim() ? $('#words').value.trim() + ' ' : '';
-      recog = new SR();
-      recog.lang = LOCALE[$('#lang').value] || 'en-IN';
-      recog.interimResults = true;
-      recog.continuous = true;
-      recog.onresult = (e) => {
+    const WORDS_HINT = 'Your words appear here as you speak.';
+    let session = null; // { recog, rec, stream, words, gotWords, wordsOnly, timer, watchdog, t0 }
+
+    function say(msg) { $('#words-src').textContent = msg; }
+    function startRecognition(track) {
+      const S = session;
+      if (!SR || !S) return;
+      const r = new SR();
+      r.lang = LOCALE[$('#lang').value] || 'en-IN';
+      r.interimResults = true;
+      r.continuous = true;
+      r.onspeechstart = () => say('Hearing you…');
+      r.onresult = (e) => {
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finalWords += e.results[i][0].transcript.trim() + ' ';
-          else interim += e.results[i][0].transcript;
+          const t = e.results[i][0].transcript.trim();
+          if (e.results[i].isFinal) S.words += t + ' ';
+          else interim += t + ' ';
         }
-        $('#words').value = (finalWords + interim).trim();
+        const text = (S.words + interim).trim();
+        if (text) { S.gotWords = true; $('#words').value = text; say(WORDS_HINT); }
       };
-      recog.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') $('#words-src').textContent = `Words not recognised (${e.error}): please type them.`; };
-      recog.onend = () => { if (rec && recog) { try { recog.start(); } catch {} } }; // keep listening while recording
-      try { recog.start(); } catch {}
+      r.onerror = (e) => {
+        if (e.error === 'audio-capture' && !S.wordsOnly) return wordsOnly();       // microphone taken by the recorder
+        if (e.error === 'network') say('Words need an internet connection: please type them.');
+        else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') say('Allow the microphone for this site to see your words, or type them.');
+        else if (e.error === 'language-not-supported') say('Words are not available for this language here: please type them.');
+      };
+      r.onend = () => { if (session === S && S.recog === r) setTimeout(() => { if (session === S && S.recog === r) { try { r.start(track); } catch {} } }, 150); };
+      S.recog = r;
+      try { track ? r.start(track) : r.start(); } catch { try { r.start(); } catch {} }
     }
-    function stopWords() { const r = recog; recog = null; try { r?.stop(); } catch {} }
+
+    // No words while recording: give the microphone to recognition alone.
+    function wordsOnly() {
+      const S = session;
+      if (!S || S.wordsOnly) return;
+      S.wordsOnly = true;
+      const old = S.recog; S.recog = null; try { old?.abort(); } catch {}
+      if (S.rec && S.rec.state !== 'inactive') { S.dropAudio = true; S.rec.stop(); }
+      S.stream?.getTracks().forEach((t) => t.stop());
+      $('#rec-title').textContent = 'Listening for your words';
+      say('Please say your directions once more: your words will appear here.');
+      setTimeout(() => startRecognition(null), 300);
+    }
+
+    function stopSession() {
+      const S = session;
+      if (!S) return;
+      session = null;
+      clearInterval(S.timer); clearTimeout(S.watchdog);
+      const r = S.recog; S.recog = null; try { r?.stop(); } catch {}
+      if (S.rec && S.rec.state !== 'inactive') S.rec.stop();
+      else S.stream?.getTracks().forEach((t) => t.stop());
+      $('#mic').classList.remove('live');
+      $('#rec-title').textContent = $('#words').value.trim() ? 'Directions captured' : 'Record voice directions';
+      $('#rec-state').textContent = $('#words').value.trim() ? 'Check your words below, then place the order. Tap the mic to add more.' : 'Tap the mic and speak.';
+      if ($('#words').value.trim()) say(WORDS_HINT + ' Correct anything that is wrong.');
+    }
 
     $('#mic').onclick = async () => {
-      if (rec) { rec.stop(); stopWords(); return; }
+      if (session) return stopSession();
       if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'First choose the language you will speak in.'; return; }
+      const S = session = { words: $('#words').value.trim() ? $('#words').value.trim() + ' ' : '', gotWords: false, wordsOnly: false, t0: Date.now() };
+      $('#mic').classList.add('live');
+      $('#rec-title').textContent = 'Listening';
+      say('Listening for your words…');
+      S.timer = setInterval(() => { if (session === S) $('#rec-state').textContent = `${S.wordsOnly ? 'Listening' : 'Recording'}… ${Math.round((Date.now() - S.t0) / 1000)} s · tap to stop`; }, 500);
+      let track = null;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-        const chunks = [], t0 = Date.now();
-        rec = new MediaRecorder(stream);
-        rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-        rec.onstop = () => {
-          stream.getTracks().forEach((t) => t.stop());
-          clearInterval(rec.timer);
-          const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
-          rec = null;
-          $('#mic').classList.remove('live');
-          const r = new FileReader();
-          r.onload = () => { audioUrl = r.result; $('#rec-audio').src = audioUrl; $('#rec-audio').classList.remove('hidden'); $('#rec-title').textContent = 'Voice directions recorded'; $('#rec-state').textContent = 'Tap the mic to record again.'; };
-          r.readAsDataURL(blob);
+        S.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        track = S.stream.getAudioTracks()[0];
+        const chunks = [];
+        S.rec = new MediaRecorder(S.stream);
+        S.rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        S.rec.onstop = () => {
+          S.stream.getTracks().forEach((t) => t.stop());
+          if (S.dropAudio || !chunks.length) return;
+          const blob = new Blob(chunks, { type: S.rec.mimeType || 'audio/webm' });
+          const fr = new FileReader();
+          fr.onload = () => { audioUrl = fr.result; $('#rec-audio').src = audioUrl; $('#rec-audio').classList.remove('hidden'); };
+          fr.readAsDataURL(blob);
         };
-        rec.start();
-        startWords();
-        rec.timer = setInterval(() => ($('#rec-state').textContent = `Recording… ${Math.round((Date.now() - t0) / 1000)} s · tap to stop`), 500);
-        $('#mic').classList.add('live');
-        $('#rec-title').textContent = 'Listening';
-      } catch (e) { $('#rec-state').textContent = `Microphone: ${e.message}`; }
+        S.rec.start();
+      } catch (e) { S.rec = null; track = null; }
+      if (!SR) { say('This browser cannot show your words: please type them.'); return; }
+      startRecognition(track);
+      // Words must start arriving soon after she starts speaking; otherwise recognition gets the microphone alone.
+      S.watchdog = setTimeout(() => { if (session === S && !S.gotWords && S.rec) wordsOnly(); }, 6000);
     };
 
     $('#place').onclick = async () => {
+      if (session) stopSession();
       if (!audioUrl && !$('#words').value.trim()) { $('#rec-state').textContent = 'Please record (or type) your directions first.'; return; }
       if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'Choose the language you spoke in.'; return; }
       const items = [...cart].map(([id, q]) => ({ name: PRODUCTS[id].name, q, price: PRODUCTS[id].price }));
@@ -293,7 +341,7 @@
     }
     $('#cartbar').onclick = openCheckout;
     $('#back').onclick = () => $('#checkout').classList.add('hidden');
-    $('#new').onclick = () => { orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#rec-audio').classList.add('hidden'); $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
+    $('#new').onclick = () => { orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#rec-audio').classList.add('hidden'); $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
     try { orderId = localStorage.getItem('instakart.order'); } catch {}
     renderShop();
     if (orderId) showTrack();
