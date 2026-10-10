@@ -59,7 +59,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 for line in proc.stdout:
                     line = line.strip()
-                    if line:
+                    if line.startswith("ERROR"):  # e.g. "ERROR: ERROR_NO_MATCH": not speech
+                        code = line.split(":", 1)[-1].strip() or "ERROR"
+                        self.wfile.write(f"event: stterror\ndata: {json.dumps(code)}\n\n".encode())
+                        self.wfile.flush()
+                    elif line:
                         self.wfile.write(f"data: {json.dumps(line)}\n\n".encode())
                         self.wfile.flush()
                 self.wfile.write(b"event: done\ndata: \"\"\n\n")
