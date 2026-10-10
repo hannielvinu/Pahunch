@@ -8,6 +8,7 @@ import { say, text, buzz, Compass, unlockSpeech } from './guide.js';
 import { Detector } from './detector.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable } from './voice.js';
+import { listen, sttAvailable } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -527,21 +528,39 @@ $('#handsfree').onclick = () => {
 $('#mic').onclick = async () => {
   unlockSpeech();
   const btn = $('#mic'), status = $('#mic-status');
-  if (btn.classList.contains('live')) { dictate.stop?.(); return; }
+  if (btn.classList.contains('live')) { micStop?.(); return; }
   btn.classList.add('live');
   const sheet = $('#vsheet');
   sheet.hidden = false;
-  sheet.classList.remove('speaking');
+  sheet.classList.remove('speaking', 'offline');
   $('#vlive').textContent = 'Speak the directions in any language';
+  $('#vtrans').textContent = '';
   try {
-    const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; });
-    if (textOut) { $('#note').value = textOut; status.hidden = true; } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
-  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type or paste instead.`; }
+    if (await sttAvailable()) {
+      // Offline, on-device Whisper: real waveform, live transcript, any language -> English for the parser.
+      sheet.classList.add('offline');
+      $('#vtitle').textContent = 'Listening · on-device';
+      const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; } });
+      micStop = rec.stop;
+      const r = await rec.done;
+      if (r.text) {
+        $('#note').value = r.text;
+        if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
+        else status.hidden = true;
+      } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
+    } else {
+      $('#vtitle').textContent = 'Listening…';
+      micStop = () => dictate.stop?.();
+      const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; });
+      if (textOut) { $('#note').value = textOut; status.hidden = true; } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
+    }
+  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type instead, or run tools/get-whisper.sh for offline voice.`; }
   sheet.hidden = true;
   btn.classList.remove('live');
 };
 
-$('#vdone').onclick = () => dictate.stop?.();
+let micStop = null;
+$('#vdone').onclick = () => micStop?.();
 
 // ---------- Modes ----------
 function setMode(mode) {

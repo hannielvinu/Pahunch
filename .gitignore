@@ -7,3 +7,4 @@ models/
 node_modules/
 .claude/
 llama.log
+whisper.log

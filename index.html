@@ -200,9 +200,11 @@
   <!-- Voice: live waves + live transcript -->
   <div id="vsheet" class="vsheet" hidden>
     <div class="vcard">
-      <p class="vtitle">Listening…</p>
+      <p id="vtitle" class="vtitle">Listening…</p>
+      <canvas id="vwave" class="vwave" aria-hidden="true"></canvas>
       <div class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <p id="vlive" class="vlive">Speak the directions in any language</p>
+      <p id="vtrans" class="meta"></p>
       <button id="vdone" class="btn primary big">Done</button>
     </div>
   </div>

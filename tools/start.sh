@@ -23,7 +23,19 @@ else
   echo "No LLM: run 'pkg install llama-cpp' and 'bash tools/get-models.sh' first. App still works with the rule parser."
 fi
 
+# Offline speech-to-text (whisper.cpp server, port 8082), if tools/get-whisper.sh has been run.
+WHISPER_BIN="$HOME/whisper.cpp/build/bin/whisper-server"
+WMODEL=$(ls models/whisper/ggml-small-q5_1.bin models/whisper/ggml-base.bin 2>/dev/null | head -1)
+if [ -x "$WHISPER_BIN" ] && [ -n "$WMODEL" ]; then
+  pkill -f whisper-server 2>/dev/null
+  "$WHISPER_BIN" -m "$WMODEL" --host 127.0.0.1 --port 8082 -l auto -t 4 > whisper.log 2>&1 &
+  WHISPER=$!
+  echo "On-device speech ($WMODEL) starting (pid $WHISPER, log: whisper.log)"
+else
+  echo "No offline speech yet: run 'bash tools/get-whisper.sh' once."
+fi
+
 pkill -f "http.server 8080" 2>/dev/null
-trap 'kill $LLAMA 2>/dev/null' EXIT
+trap 'kill $LLAMA $WHISPER 2>/dev/null' EXIT
 echo "App: http://localhost:8080"
 python -m http.server 8080
