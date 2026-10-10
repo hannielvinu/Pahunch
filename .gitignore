@@ -11,3 +11,4 @@ whisper.log
 whisper-live.log
 lunch-setup.log
 llama-gpu.log
+llama-model.log

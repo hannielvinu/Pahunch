@@ -33,6 +33,16 @@ if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
     echo "On-device LLM starting on the CPU (pid $LLAMA, log: llama.log)…"
     wait_llm 60 && STARTED=cpu
   fi
+  # A model this llama.cpp build cannot load (e.g. Gemma 3n on an old build): fall back to Qwen2.5-1.5B.
+  FALLBACK=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
+  if [ -z "$STARTED" ] && [ "$MODEL" != "$FALLBACK" ] && [ -f "$FALLBACK" ] && [ -n "$CPU_BIN" ]; then
+    echo "Could not load $MODEL (see llama-model.log); falling back to Qwen2.5-1.5B."
+    cp llama.log llama-model.log 2>/dev/null
+    MODEL=$FALLBACK
+    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
+    LLAMA=$!
+    wait_llm 60 && STARTED="cpu, Qwen2.5-1.5B"
+  fi
   [ -n "$STARTED" ] && echo "On-device LLM ready ($STARTED)." || echo "On-device LLM failed to start: tail -20 llama.log"
 else
   echo "No LLM: run 'pkg install llama-cpp' and 'bash tools/get-models.sh' first. App still works with the rule parser."
