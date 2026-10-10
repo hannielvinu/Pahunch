@@ -79,6 +79,46 @@
     .ans button { flex: 1 1 70px; min-height: 48px; border-radius: 12px; border: 1.5px solid var(--brand); background: #fff; color: var(--ink); font-weight: 750; font-size: 16px; }
     .ans button.yes { background: var(--ok); border-color: var(--ok); color: #fff; }
     .sent { color: var(--ok); font-weight: 700; font-size: 14px; }
+
+    /* ===== Motion & micro-interactions ===== */
+    .p { transition: transform .18s ease, box-shadow .25s ease, border-color .2s; }
+    .grid.anim .p { animation: rise .4s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+    @media (hover: hover) {
+      .p:hover { transform: translateY(-3px); box-shadow: 0 14px 28px -18px #1d223066; border-color: #ffd2bd; }
+      .p:hover .img { filter: saturate(1.15); }
+      .cats button:hover, .langs button:hover { border-color: var(--brand); }
+      .btn:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 12px 24px -14px var(--brand); }
+      .btn.ghost:hover { box-shadow: none; border-color: #ffd2bd; }
+    }
+    .p .img { transition: filter .2s, transform .3s; }
+    .add, .qty button, .cats button, .langs button, .btn, .ans button { transition: transform .12s ease, background-color .2s, color .2s, border-color .2s, box-shadow .2s, filter .2s; }
+    .add:active, .qty button:active, .cats button:active, .langs button:active, .btn:active { transform: scale(.95); }
+    @keyframes pop { 50% { transform: scale(1.12); } }
+    .cartbar:not(.hidden) { animation: slideUp .35s cubic-bezier(.2,.8,.2,1); }
+    .cartbar.bump { animation: bump .3s ease; }
+    @keyframes slideUp { from { transform: translateY(120%); } }
+    @keyframes bump { 40% { transform: scale(1.03); } }
+    .sheet:not(.hidden) { animation: fade .25s ease; }
+    .sheet:not(.hidden) > div { animation: sheetUp .38s cubic-bezier(.2,.8,.2,1); }
+    @keyframes fade { from { background: #0000; } }
+    @keyframes sheetUp { from { transform: translateY(40px); opacity: .4; } }
+    .mic { position: relative; transition: transform .15s ease, box-shadow .25s; }
+    .mic.live::before, .mic.live::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid #e11d48; animation: ripple 1.6s ease-out infinite; }
+    .mic.live::after { animation-delay: .8s; }
+    @keyframes ripple { from { transform: scale(1); opacity: .7; } to { transform: scale(1.8); opacity: 0; } }
+    #words-wrap:not(.hidden) { animation: rise .3s ease both; }
+    .steps li { position: relative; }
+    .steps li:not(:last-child)::after { content: ""; position: absolute; left: 6px; top: 26px; bottom: -8px; width: 2px; background: var(--line); }
+    .steps li.done:not(:last-child)::after { background: var(--ok); }
+    .steps li.now i { animation: pulseDot 1.2s ease-out infinite; }
+    @keyframes pulseDot { 0% { box-shadow: 0 0 0 0 #ff6a2b66; } 100% { box-shadow: 0 0 0 8px #ff6a2b00; } }
+    .done-hero:not(.hidden) { animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
+    .done-hero:not(.hidden) .ok { animation: popIn .5s cubic-bezier(.2,1.4,.4,1) both .1s; }
+    .done-hero:not(.hidden) .ok path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw .45s ease forwards .45s; }
+    @keyframes popIn { from { transform: scale(0); } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .done-hero .ok path { stroke-dashoffset: 0 !important; } }
   </style>
 </head>
 <body>
@@ -169,9 +209,12 @@
     function renderShop() {
       $('#cats').replaceChildren(...CATS.map((c) => { const b = el('button', c === cat ? 'on' : '', c); b.onclick = () => { cat = c; renderShop(); }; return b; }));
       $('#cat-title').textContent = cat;
+      $('#grid').classList.toggle('anim', renderShop.cat !== cat); // cards cascade in only on a new category
+      renderShop.cat = cat;
       const list = cat === 'Bestsellers' ? PRODUCTS.filter((p) => p.id % 2 === 0) : PRODUCTS.filter((p) => p.cat === cat);
       $('#grid').replaceChildren(...list.map((p) => {
         const d = el('div', 'p');
+        d.style.setProperty('--i', list.indexOf(p));
         const img = el('div', 'img', p.name.split(/[ ,]+/).slice(0, 2).map((w) => w[0]).join(''));
         img.style.background = `linear-gradient(150deg, ${p.color}, ${p.color}cc)`;
         const row = el('div', 'row');
@@ -190,6 +233,8 @@
       const n = [...cart.values()].reduce((a, b) => a + b, 0), total = [...cart].reduce((a, [id, q]) => a + PRODUCTS[id].price * q, 0);
       $('#cartbar').classList.toggle('hidden', !n);
       $('#cart-n').textContent = `${n} item${n > 1 ? 's' : ''} · ₹${total}`;
+      if (renderShop.n !== undefined && n !== renderShop.n && n) { const c = $('#cartbar'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+      renderShop.n = n;
     }
 
     function openCheckout() {

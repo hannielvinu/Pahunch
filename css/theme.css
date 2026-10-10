@@ -373,3 +373,64 @@ body.flashing::after { content: ""; position: fixed; inset: 0; z-index: 11; poin
 .alines .send { flex: none; min-height: 40px; padding: 6px 12px; }
 .done-summary { text-align: center; color: var(--dim); font-size: 14px; margin: 0; }
 .done-summary[hidden] { display: none; }
+
+/* ===================== Motion & micro-interactions ===================== */
+/* Screens glide in; plan steps cascade; buttons lift on hover and press in on tap. */
+.screen.enter { animation: screenIn .34s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes screenIn { from { opacity: 0; transform: translateY(12px); } }
+.btn, .chip, .role, .mode-badge, .hear, .vlang, .link { transition: transform .14s ease, box-shadow .22s ease, background-color .2s, border-color .2s, filter .2s; }
+.btn:active, .chip:active, .role:active, .hear:active { transform: scale(.97); }
+@media (hover: hover) {
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .btn.ghost:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+  .role:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -18px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .step:hover { transform: translateX(3px); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+  .orders li:hover, .door:hover { background: var(--panel-2); }
+}
+.step { transition: transform .18s ease, border-color .2s; animation: stepIn .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 80ms + 60ms); }
+@keyframes stepIn { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+.mic { transition: transform .16s ease, box-shadow .25s; }
+.mic:active { transform: scale(.94); }
+.mic.live::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); animation: ring 1.4s ease-out infinite; pointer-events: none; }
+@keyframes ring { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+/* "▶ hear it" plays with a moving equaliser */
+.hear.playing { background: var(--soft); border-color: var(--accent); }
+.hear.playing::after { content: ""; display: inline-block; width: 12px; height: 10px; margin-left: 6px; vertical-align: -1px;
+  background: linear-gradient(var(--accent) 0 0) 0 100% / 2px 40% no-repeat, linear-gradient(var(--accent) 0 0) 5px 100% / 2px 90% no-repeat, linear-gradient(var(--accent) 0 0) 10px 100% / 2px 60% no-repeat;
+  animation: eq .7s ease-in-out infinite alternate; }
+@keyframes eq { to { background-size: 2px 100%, 2px 35%, 2px 100%; } }
+/* New order: slides in with a live dot */
+.orders { position: relative; }
+.orders-h::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); animation: ping 1.4s ease-out infinite; }
+@keyframes ping { to { box-shadow: 0 0 0 10px transparent; } }
+/* Privacy chip breathes so the eye finds it */
+.net-chip:not(.off) { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, #16a34a 14%, transparent); } }
+/* Guidance: the step card swaps with a soft slide; dots grow */
+.step-now { animation: cardIn .35s cubic-bezier(.2, .8, .2, 1); }
+@keyframes cardIn { from { opacity: 0; transform: translateX(14px); } }
+.dots i { transition: transform .25s, background-color .25s; }
+.dots i.now { transform: scale(1.35); }
+
+/* ===================== AI pipeline widget ===================== */
+.pipe { list-style: none; display: flex; gap: 0; margin: 4px 0 10px; padding: 0; counter-reset: p; }
+.pipe[hidden] { display: none; }
+.pipe li { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; font-size: 11.5px; font-weight: 650; color: var(--dim); text-align: center; }
+.pipe li::before { content: ""; position: absolute; top: 9px; left: calc(-50% + 12px); right: calc(50% + 12px); height: 2px; background: var(--line); border-radius: 2px; }
+.pipe li:first-child::before { display: none; }
+.pipe li.done::before, .pipe li.now::before { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.pipe li i { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); position: relative; z-index: 1; transition: background-color .3s, border-color .3s, transform .3s; }
+.pipe li.done i { background: var(--accent); border-color: var(--accent); }
+.pipe li.done i::after { content: ""; position: absolute; left: 6px; top: 2.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pipe li.now { color: var(--text); }
+.pipe li.now i { border-color: var(--accent); transform: scale(1.15); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); animation: ping 1.2s ease-out infinite; }
+.pipe li.skip { opacity: .4; }
+.thinking { animation: screenIn .3s ease both; }
+/* Shimmer while the AI works */
+#thinking-status:not(:empty) { background: linear-gradient(90deg, var(--dim) 30%, var(--text) 50%, var(--dim) 70%) 0 0 / 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { to { background-position: -220% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.enter, .step, .step-now, .thinking, .net-chip, .orders-h::before, .pipe li.now i, .mic.live::after, .hear.playing::after, #thinking-status { animation: none !important; }
+  #thinking-status { color: var(--dim); background: none; }
+}
