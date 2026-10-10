@@ -72,7 +72,7 @@ export const BRANDS = { medplus: ['pharmacy', 'MedPlus'], apollo: ['pharmacy', '
 
 const WALA = set('wala wali wale waala waali waale with');
 const HONORIFIC = set('sri shri shree sree');
-const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road see look find dekho dekhiye dekh nodi paaru paarunga area place');
+const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road see look find dekho dekhiye dekh nodi paaru paarunga area place station stand junction');
 // Generic words that are never a landmark's proper name.
 export const GENERIC = set('main road cross street lane gali area place side corner medical shop store building the');
 // Turn verbs that follow "left/right" in code-mixed speech ("left cut pannu", "right lo", "baayen mudo").

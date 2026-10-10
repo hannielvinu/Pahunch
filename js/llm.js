@@ -141,7 +141,7 @@ The input may be English, Hindi, Tamil, Kannada, Malayalam or a mix, in any scri
 Use only these phrases, joined by commas:
 "go past the <landmark>", "take the first|second|third|fourth left|right", "then the <colour> <landmark> opposite|next to|near the <landmark>", "<number> floor".
 Keep the customer's proper names (temple names, shop names) in English letters. Translate colours and landmark words to English (mandir/kovil = temple, medical = pharmacy, gate, house, shop).
-Keep the starting point as a landmark ("from the bus stop side" = "go past the bus stop"). Leave out filler, warnings and things not to do ("don't go there"). Never add landmarks that were not said. Output only the line.`;
+Keep the starting point as a landmark ("from the bus stop side" = "go past the bus stop"). A place they say not to enter or not to turn at is still a landmark to go past ("there is Apollo pharmacy, don't go there" = "go past the Apollo pharmacy"). Leave out filler. Never add landmarks that were not said. Output only the line.`;
 
 const SHOTS_REWRITE = [
   ['Main road se seedha aao, Ganesh mandir ke baad doosri gali mein baayen mudo, phir MedPlus medical ke saamne neela gate. Doosri manzil.',
@@ -428,6 +428,8 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
       const rw = parseRules(line);
       // Names in the rewrite must come from the customer's words (skipped for native-script notes: transliterated).
       for (const s of rw.steps) for (const lm of [s.landmark, s.ref?.landmark]) if (lm?.name) lm.name = cleanName(lm.name, note);
+      // A landmark whose name was dropped and that has no type, colour or relation left says nothing: remove it.
+      rw.steps = rw.steps.filter((s) => s.kind === 'turn' || s.ref || (s.landmark && (s.landmark.name || s.landmark.colour || s.landmark.type !== 'other')) || s === rw.steps.at(-1));
       rw.steps.forEach((s) => { s.verify = verifyFor(s); });
       const g = ground(rw, rules);
       Object.assign(g, { lang: rules.lang, parser: 'llm', rewrite: line });
