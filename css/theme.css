@@ -309,3 +309,16 @@ body[data-mode="silent"] .silent-only { display: block; }
 body.flashing::after { content: ""; position: fixed; inset: 0; z-index: 11; pointer-events: none; background: #fff; animation: flashscreen .45s ease-out forwards; }
 @keyframes flashscreen { from { opacity: .7; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { body.flashing::after { animation: none; opacity: 0; } }
+/* Customer's voice note + "Guide me in" */
+.inrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.vnote-btn { flex: 1 1 150px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.guide-lang { flex: 1 1 150px; display: flex; flex-direction: column; font-size: 12px; font-weight: 650; color: var(--dim); gap: 2px; }
+.guide-lang select { min-height: 40px; padding: 6px 10px; font: 600 15px Inter, sans-serif; border-radius: 12px; }
+.vnote { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; box-shadow: var(--shadow); }
+.vnote[hidden] { display: none; }
+.vnote-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.vnote-top .i { color: var(--accent); }
+.vnote-top .meta { margin-left: auto; font-size: 12.5px; }
+.vnote audio { width: 100%; height: 36px; }
+/* Plan step in the rider's language, English underneath */
+.step-en { font-size: 12.5px; color: var(--dim); margin-top: 1px; }

@@ -66,15 +66,12 @@
       <strong style="font-size:17px">Priya S. · Flat 2B</strong>
       <div class="row" style="margin-top:10px"><span class="eta" id="dist">1.2 km</span><span class="note" id="maps">Maps navigation</span></div>
       <div class="bar"><i id="prog"></i></div>
-      <p class="label" style="margin-top:12px">Customer's directions <span id="src-tag" class="tag" style="margin-left:6px">voice note</span></p>
+      <p class="label" style="margin-top:12px">Customer's directions <span id="src-tag" class="tag" style="margin-left:6px">text</span></p>
+      <audio id="dir-audio" controls class="hidden" style="width:100%;margin:8px 0"></audio>
       <div class="quote" id="dir"></div>
-      <div id="memory" class="card hidden" style="padding:12px;margin-bottom:12px;box-shadow:none">
-        <p class="label">Door remembered from an earlier delivery</p>
-        <div class="door"><img id="mem-photo" alt=""><div><strong id="mem-dest"></strong><div class="note" style="text-align:left;margin:0" id="mem-pin"></div></div></div>
-      </div>
       <button class="btn ghost" id="drive">Simulate arriving in the area</button>
       <div class="last" id="last">
-        <p><b>Last 100 m.</b> Maps stops at the lane. Pahunch takes the customer's own words and guides you to the door, on this phone.</p>
+        <p><b>Last 100 m.</b> Maps stops at the lane. Pahunch turns the customer's voice note into a checked route in your language and guides you to the door, on this phone, no network needed.</p>
         <a class="btn pah" id="go-rider"><svg viewBox="0 0 64 64"><path d="M32 9c-10 0-17.5 7.4-17.5 17.2C14.5 39 32 55 32 55s17.5-16 17.5-28.8C49.5 16.4 42 9 32 9z" fill="#fff"/><path d="M26 37V25a6 6 0 0 1 12 0v12z" fill="#e23744"/></svg>Find the door with Pahunch</a>
       </div>
     </section>
@@ -82,11 +79,12 @@
     <!-- ===== Customer ===== -->
     <section data-pane="customer" class="card hidden">
       <p class="label">Help your rider find your door</p>
-      <strong style="font-size:17px">Say how to reach you, in your own words</strong>
-      <p class="note" style="text-align:left;margin:4px 0 0">Any language: English, हिन्दी, தமிழ், ಕನ್ನಡ, മലയാളം, or mixed. Landmarks, turns, gate colour, floor.</p>
-      <button class="mic" id="c-mic" aria-label="Speak directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-      <p class="note" id="c-state">Tap and speak</p>
-      <textarea id="c-text" placeholder="e.g. Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate, doosri manzil"></textarea>
+      <strong style="font-size:17px">Record a voice note: how to reach your door</strong>
+      <p class="note" style="text-align:left;margin:4px 0 0">Any language: English, हिन्दी, தமிழ், ಕನ್ನಡ, മലയാളം, বাংলা, or mixed. Landmarks, turns, gate colour, floor.</p>
+      <button class="mic" id="c-mic" aria-label="Record a voice note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <p class="note" id="c-state">Tap to record · tap again to stop</p>
+      <audio id="c-audio" controls class="hidden" style="width:100%;margin-bottom:8px"></audio>
+      <textarea id="c-text" placeholder="Or type them, e.g. Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate, doosri manzil"></textarea>
       <button class="btn brand" id="c-save" style="margin-top:10px">Send to my rider</button>
       <p class="note" id="c-done"></p>
     </section>
@@ -101,7 +99,7 @@
       <p class="note">Emergency mode: no questions asked, torch on in the dark, big prompts.</p>
     </section>
 
-    <p class="note">How partners integrate: one link with the customer's own words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
+    <p class="note">How partners integrate: one link carrying the customer's voice note or words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
   </main>
   <script type="module">
     const $ = (s) => document.querySelector(s);
@@ -118,19 +116,17 @@
     });
 
     // Rider: directions, remembered door, approach, last-100 m hand-over
+    const AKEY = 'pahunch.partner.audio';
+    const voiceNote = () => { try { return localStorage.getItem(AKEY) || ''; } catch { return ''; } };
     function renderRider() {
+      const a = voiceNote();
+      $('#dir-audio').classList.toggle('hidden', !a);
+      if (a) $('#dir-audio').src = a;
+      $('#src-tag').textContent = a ? 'voice note' : 'text';
+      $('#dir').classList.toggle('hidden', !!a);
       $('#dir').textContent = directions();
-      $('#go-rider').href = link(directions(), 'delivery', { job: '4821', who: 'Priya S. · Flat 2B', src: 'Delivery partner' });
-      let cards = [];
-      try { cards = JSON.parse(localStorage.getItem('pahunch.doors.v1') || '[]'); } catch {}
-      const c = cards.find((x) => x.note && x.note.trim() === directions().trim()) || null;
-      $('#memory').classList.toggle('hidden', !c);
-      if (c) {
-        $('#mem-dest').textContent = c.dest + (c.floor != null ? ` · floor ${c.floor === 0 ? 'ground' : c.floor}` : '');
-        $('#mem-pin').textContent = c.digipin ? `DIGIPIN ${c.digipin.replace(/(...)(...)(....)/, '$1-$2-$3')} · saved ${new Date(c.at).toLocaleDateString()}` : `saved ${new Date(c.at).toLocaleDateString()}`;
-        $('#mem-photo').src = c.photo || '';
-        $('#mem-photo').classList.toggle('hidden', !c.photo);
-      }
+      const job = { job: '4821', who: 'Priya S. · Flat 2B', src: 'Delivery partner' };
+      $('#go-rider').href = a ? 'index.html#' + new URLSearchParams({ audio: 'partner', mode: 'delivery', ...job }) : link(directions(), 'delivery', job);
     }
     renderRider();
     let d = 1200;
@@ -151,31 +147,38 @@
       }, 650);
     };
 
-    // Customer: speak the directions once (Chrome speech)
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let stop = null;
+    // Customer: record a voice note, exactly as people already do in chat apps. Only the microphone is used
+    // (no speech service), so it works offline; the rider's phone turns it into a route.
+    let rec = null, pending = '';
     $('#c-mic').onclick = async () => {
-      if (stop) { stop(); return; }
-      $('#c-mic').classList.add('live');
-      $('#c-state').textContent = 'Listening…';
+      if (rec) { rec.stop(); return; }
       try {
-        if (SR) {
-          await new Promise((res, rej) => {
-            const r = new SR(); r.lang = 'en-IN'; r.interimResults = true;
-            r.onresult = (e) => { $('#c-text').value = [...e.results].map((x) => x[0].transcript).join(' '); };
-            r.onerror = (e) => rej(new Error(e.error)); r.onend = res; stop = () => r.stop(); r.start();
-          });
-        } else throw new Error('type the directions below');
-        $('#c-state').textContent = 'Got it. Check the words, then send.';
-      } catch (e) { $('#c-state').textContent = `Voice: ${e.message}`; }
-      stop = null;
-      $('#c-mic').classList.remove('live');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        const chunks = [];
+        rec = new MediaRecorder(stream);
+        rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        rec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+          rec = null;
+          $('#c-mic').classList.remove('live');
+          const r = new FileReader();
+          r.onload = () => { pending = r.result; $('#c-audio').src = pending; $('#c-audio').classList.remove('hidden'); $('#c-state').textContent = 'Recorded. Play it back, then send.'; };
+          r.readAsDataURL(blob);
+        };
+        rec.start();
+        $('#c-mic').classList.add('live');
+        $('#c-state').textContent = 'Recording… tap to stop';
+      } catch (e) { $('#c-state').textContent = `Microphone: ${e.message}. You can type instead.`; }
     };
     $('#c-save').onclick = () => {
       const t = $('#c-text').value.trim();
-      if (!t) { $('#c-done').textContent = 'Say or type the directions first.'; return; }
-      try { localStorage.setItem(KEY, t); } catch {}
-      $('#c-done').textContent = 'Sent. Your rider will get these words at your lane.';
+      if (!pending && !t) { $('#c-done').textContent = 'Record a voice note or type the directions first.'; return; }
+      try {
+        if (pending) localStorage.setItem(AKEY, pending); else localStorage.removeItem(AKEY);
+        if (t) localStorage.setItem(KEY, t);
+      } catch { $('#c-done').textContent = 'That voice note is too long to store here: keep it under a minute.'; return; }
+      $('#c-done').textContent = pending ? 'Voice note sent. Your rider gets it at your lane.' : 'Sent. Your rider gets these words at your lane.';
       renderRider();
     };
     $('#c-text').value = directions() === SAMPLE ? '' : directions();

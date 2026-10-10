@@ -138,3 +138,27 @@ export function listen({ canvas, onPartial, onState, getLang = () => 'auto' } = 
   })();
   return { stop: () => stopFn?.(), done };
 }
+
+// A customer's voice note (WhatsApp .opus/.ogg, .m4a, .mp3, .webm…) transcribed on this phone by Whisper.
+// The browser decodes it; it is cut into 14 s pieces (the server's audio window) and each piece is transcribed
+// in order, in the language it was spoken (the route reader understands every script; names stay as said).
+// -> { text, seconds, ms }
+export async function transcribeNote(blob, { lang = 'auto', onProgress } = {}) {
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  const ctx = new AC();
+  let buf;
+  try { buf = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close?.(); }
+  const n = buf.length, ch = buf.numberOfChannels, rate = buf.sampleRate, mono = new Float32Array(n);
+  for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / ch; }
+  const piece = Math.floor(14 * rate), parts = Math.ceil(n / piece), out = [];
+  const t0 = performance.now();
+  for (let k = 0; k < parts; k++) {
+    const seg = mono.subarray(k * piece, Math.min(n, (k + 1) * piece));
+    let e = 0;
+    for (let i = 0; i < seg.length; i += 8) e += seg[i] * seg[i];
+    if (Math.sqrt(e / (seg.length / 8 || 1)) < 0.004) continue; // silence
+    onProgress?.(k + 1, parts);
+    out.push(await transcribe(toWav16k([seg], rate, 15), false, 60000, URL_STT, lang));
+  }
+  return { text: out.join(' ').replace(/\s+/g, ' ').trim(), seconds: Math.round(n / rate), ms: Math.round(performance.now() - t0) };
+}

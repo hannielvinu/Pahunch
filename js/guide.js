@@ -163,3 +163,12 @@ export function localName(lm, lang = 'en') {
   const type = lm.type === 'other' || (lm.name && (lm.type === 'sign' || lm.type === 'desk')) ? '' : L[lm.type] || lm.type.replace('_', ' ');
   return [lm.colour ? L[lm.colour] || lm.colour : '', lm.name, type].filter(Boolean).join(' ');
 }
+
+// A plan step in the rider's language ("ரெண்டாவது தெருவுல லெஃப்ட் திரும்புங்க.", "MedPlus मेडिकल देखते रहिए।").
+export function stepText(step, lang = 'en') {
+  const T = text(lang);
+  if (step.kind === 'turn') return T.turn(step.ordinal, T[step.turn]);
+  const name = localName(step.landmark, lang);
+  if (step.kind === 'pass') return T.look(name);
+  return `${T.dest}: ${name}${step.ref?.landmark ? ` · ${localName(step.ref.landmark, lang)}` : ''}`;
+}

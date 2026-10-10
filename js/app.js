@@ -4,12 +4,12 @@ import { parseNote, warmNative, complete, agrees, translateLine } from './llm.js
 import { Vision, matchSigns, ocrLangs } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
-import { say as speakAloud, text, buzz, Compass, unlockSpeech, localName, BUZZ } from './guide.js';
+import { say as speakAloud, text, buzz, stepText, Compass, unlockSpeech, localName, BUZZ } from './guide.js';
 import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable, localSpeechStatus, installLocalSpeech, localeFor } from './voice.js';
-import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
+import { listen, sttAvailable, SPEECH_LANGS, transcribeNote } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -193,7 +193,8 @@ AI understood: "${p.rewrite}"`;
   list.replaceChildren();
   g.steps.forEach((s, i) => {
     const li = el('li', `step kind-${s.kind}`);
-    li.append(el('div', 'step-line', describe(s)));
+    if (state.lang && state.lang !== 'en') { li.append(el('div', 'step-line', stepText(s, state.lang)), el('div', 'step-en', describe(s))); }
+    else li.append(el('div', 'step-line', describe(s)));
     const row = el('div', 'chips');
     for (const [cls, label] of chips(s)) row.append(el('span', `tag ${cls}`, label));
     li.append(row);
@@ -642,7 +643,7 @@ $('#again').onclick = () => show('home');
 function renderDoors() {
   const cards = loadCards();
   $('#doors').hidden = !cards.length;
-  $('#doors-sum').textContent = `Saved doors (${cards.length})`;
+  $('#doors-sum').textContent = `Recent arrivals (${cards.length})`;
   $('#doors-list').replaceChildren(...cards.map((c) => {
     const li = el('li');
     const b = el('button', 'door');
@@ -1071,6 +1072,61 @@ setInterval(() => {
   $('#sensors').textContent = sensors.report({ heading: compass.heading, brightness: state.brightness });
 }, 400);
 
+// ---------- The customer's voice note -> route ----------
+// Customers already explain the way in a voice note (WhatsApp, the order chat). Pahunch takes that note as it is:
+// shared from WhatsApp, opened as a file, or handed over by a partner app, and transcribes it on this phone
+// (Whisper in Termux, no network). The words land in the box, editable, and the route is planned from them.
+async function openVoiceNote(blob, { name = 'voice note', from = '' } = {}) {
+  if (!blob || !blob.size) return toast('That voice note is empty.');
+  show('home');
+  const url = URL.createObjectURL(blob);
+  $('#vnote').hidden = false;
+  $('#vnote-audio').src = url;
+  $('#vnote-meta').textContent = from || name;
+  const status = $('#mic-status');
+  status.hidden = false;
+  if (!(await sttAvailable())) {
+    status.textContent = 'Voice notes are transcribed by the on-device speech engine: start it in Termux (bash tools/start.sh --bg). You can play the note and type what it says.';
+    return;
+  }
+  const box = $('#thinking');
+  box.hidden = false;
+  $('#thinking-out').textContent = '';
+  $('#thinking-status').textContent = 'Listening to the voice note on this phone…';
+  try {
+    const r = await transcribeNote(blob, { lang: speechLang, onProgress: (k, n) => ($('#thinking-status').textContent = n > 1 ? `Transcribing the voice note on this phone · part ${k} of ${n}…` : 'Transcribing the voice note on this phone…') });
+    box.hidden = true;
+    if (!r.text) { status.textContent = 'No speech found in that voice note. Play it and type the directions.'; return; }
+    $('#note').value = r.text;
+    state.altNote = null;
+    state.spokenLang = null;
+    state.lastVoice = { at: new Date().toLocaleTimeString(), chip: 'voice note', heard: r.text, english: '', ms: r.ms };
+    $('#vnote-meta').textContent = `${from ? from + ' · ' : ''}${r.seconds} s · transcribed on this phone in ${(r.ms / 1000).toFixed(1)} s`;
+    status.hidden = true;
+    $('#parse').click();
+  } catch (e) {
+    box.hidden = true;
+    status.textContent = `Couldn't read that voice note (${e.message}). Play it and type the directions.`;
+  }
+}
+$('#vnote-in').onchange = (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) openVoiceNote(f, { name: f.name }); };
+
+// Shared into Pahunch from WhatsApp or any app (installed PWA share target, see sw.js): a voice note or text.
+async function takeShared() {
+  try {
+    const c = await caches.open('pahunch-share');
+    const audio = await c.match('shared-audio'), txt = await c.match('shared-text');
+    await c.delete('shared-audio'); await c.delete('shared-text');
+    if (audio) return openVoiceNote(await audio.blob(), { from: 'Shared voice note' });
+    const t = txt ? (await txt.text()).trim() : '';
+    if (t) { show('home'); $('#note').value = t; $('#parse').click(); }
+  } catch {}
+}
+
+// "Guide me in": the rider's own language for the plan and the voice, whatever language the customer used.
+try { const g = localStorage.getItem('pahunch.guideLang'); if (g) $('#voice').value = g; } catch {}
+$('#voice').onchange = () => { try { localStorage.setItem('pahunch.guideLang', $('#voice').value); } catch {} };
+
 // ---------- Developer mode: tap the logo 5 times (or open with ?dev) ----------
 // Sensor readouts, the field-test panel, voice log and engine switch stay out of the rider's way.
 function setDev(on) { document.body.classList.toggle('dev', on); try { localStorage.setItem('pahunch.dev', on ? '1' : ''); } catch {} }
@@ -1140,7 +1196,20 @@ async function boot() {
   let saved = null;
   try { saved = localStorage.getItem('pahunch.mode'); } catch {}
   const link = new URLSearchParams(location.hash.slice(1));
-  if (link.get('go')) {
+  if (location.hash === '#shared') {
+    setMode(saved || 'delivery');
+    show('home');
+    takeShared();
+  } else if (link.get('audio') === 'partner') {
+    // A partner app handed over the order with the customer's voice note (demo: stored by partner.html).
+    setMode(link.get('mode') || saved || 'delivery');
+    showJob({ src: link.get('src'), id: link.get('job'), who: link.get('who') });
+    show('home');
+    let blob = null;
+    try { const d = localStorage.getItem('pahunch.partner.audio'); if (d) blob = await (await fetch(d)).blob(); } catch {}
+    if (blob) openVoiceNote(blob, { from: 'From the order' });
+    else if (link.get('go')) { $('#note').value = link.get('go'); setTimeout(() => $('#parse').click(), 300); }
+  } else if (link.get('go')) {
     // Opened from a partner app (delivery / 108 dispatch): load its directions and plan straight away.
     setMode(link.get('mode') || saved || 'delivery');
     $('#note').value = link.get('go');

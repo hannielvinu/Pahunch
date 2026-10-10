@@ -86,7 +86,7 @@
     <p class="meta">Same engine, tuned for the job.</p>
     <button class="role" data-mode="delivery"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-scooter"/></svg></span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
     <button class="role" data-mode="ambulance"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-ambulance"/></svg></span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
-    <button class="role" data-mode="silent"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-vibrate"/></svg></span><span><strong>Deaf / hard-of-hearing rider</strong><em>Silent mode: everything is shown and felt; the customer's call becomes captions</em></span></button>
+    <button class="role" data-mode="silent"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-vibrate"/></svg></span><span><strong>Silent guidance</strong><em>No sound needed: every instruction is shown big and felt as vibration</em></span></button>
     <button class="role" data-mode="ride"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-car"/></svg></span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
   </section>
 
@@ -97,13 +97,17 @@
     </header>
     <div class="hero">
       <h2 id="home-title">Where to?</h2>
-      <p id="home-sub" class="meta">Speak or paste the directions exactly as the customer gave them.</p>
+      <p id="home-sub" class="meta">Open the customer's voice note, or speak or paste their directions as they gave them.</p>
       <p id="voice-pack" class="voice-pack" hidden></p>
     </div>
     <div id="job" class="job" hidden>
       <div class="job-top"><span id="job-src" class="job-src">Partner app</span><span id="job-id" class="job-id"></span></div>
       <strong id="job-who"></strong>
       <p class="meta">Last 100 m · the customer's own directions are loaded below</p>
+    </div>
+    <div id="vnote" class="vnote" hidden>
+      <div class="vnote-top"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg><strong>Customer's voice note</strong><span id="vnote-meta" class="meta"></span></div>
+      <audio id="vnote-audio" controls preload="metadata"></audio>
     </div>
     <div class="note-box">
       <textarea id="note" rows="5" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
@@ -113,6 +117,21 @@
       <svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>
       <span><strong>Tap the mic on your keyboard</strong> and speak. Gboard recognises it on this phone, even in airplane mode.</span>
       <button id="kbd-plan" class="btn primary">Plan</button>
+    </div>
+    <div class="inrow">
+      <label for="vnote-in" class="btn ghost vnote-btn"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Open voice note</label>
+      <input id="vnote-in" type="file" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav,.aac,.amr,.webm" hidden>
+      <label class="guide-lang">Guide me in
+        <select id="voice">
+          <option value="auto">Customer's language</option>
+          <option value="en">English</option>
+          <option value="hi">हिन्दी</option>
+          <option value="ta">தமிழ்</option>
+          <option value="kn">ಕನ್ನಡ</option>
+          <option value="ml">മലയാളം</option>
+          <option value="bn">বাংলা</option>
+        </select>
+      </label>
     </div>
     <p id="mic-status" class="meta" hidden></p>
     <div id="haptic-legend" class="panel silent-only">
@@ -124,7 +143,7 @@
       </div>
       <p class="meta">Tap a row to feel it.</p>
     </div>
-    <button id="callmode" class="callcard">
+    <button id="callmode" class="callcard dev-only">
       <span class="ico"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></span>
       <span><strong>Customer on the phone? Call mode</strong><em>Put the call on speaker: live captions in your language, then the route</em></span>
     </button>
@@ -160,13 +179,6 @@
       <button id="engine-toggle" class="btn ghost">Speech: phone engine</button>
     </details>
     <div hidden>
-        <select id="voice">
-          <option value="auto">Auto (same as note)</option>
-          <option value="en">English</option>
-          <option value="hi">हिन्दी</option>
-          <option value="kn">ಕನ್ನಡ</option>
-          <option value="ta">தமிழ்</option>
-        </select>
         <select id="engine">
           <option value="auto">Auto: on-device AI + rules</option>
           <option value="native">On-device AI · llama.cpp (Termux)</option>

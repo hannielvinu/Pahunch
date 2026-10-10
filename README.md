@@ -2,17 +2,18 @@
 
 **Maps get you to the lane. Pahunch gets you to the door.**
 
-*The phone call that finds the door:* Call mode puts the customer on speaker and shows the call as live captions in the rider's own language (translated on the phone), then turns the conversation into a route. Silent mode serves deaf and hard-of-hearing riders: every instruction is shown big and felt as vibration.
+**The customer's voice note becomes a camera-checked route, in the rider's language, on a phone with no network.**
 
-In India, addresses are landmarks, not coordinates: *"Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke
-saamne neela gate."* Maps get a rider to the lane; the last 100 metres are still solved by phone calls.
-Pahunch reads the directions people already give (typed or spoken, in English, Hindi, Tamil, Kannada,
-Malayalam or code-mixed), turns them into steps, and guides to the exact door with the camera, motion sensors,
-voice and vibration. **Everything runs on the phone, offline.** Every arrival saves a door card (DIGIPIN, photo,
-floor, route, QR), so the next visit needs no description at all.
+Indian customers already explain the way to their door, as a voice note or message in their own language and mix:
+*"Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate."* Riders can't use that at the lane:
+it's audio, it's in a language they may not speak, and nothing checks it. Pahunch takes that note as it is
+(shared from WhatsApp into the installed app, opened as a file, or handed over by a partner app at the last 100 m),
+transcribes it on the phone, turns it into numbered steps in the **rider's** language (a Tamil note becomes a Hindi
+route), and guides to the door by voice and vibration, with the camera **confirming each landmark** (signboard,
+object, gate colour) before it says "arrived". Nothing leaves the phone.
 
-Built from scratch by **Hanniel Vinu** during the iQOO Hackathon 2026 Grand Finale (Mobility track), 9–11 October
-2026, on the iQOO 15. The commit history is the build log.
+What it is not: not a map, not a door database, not a call translator. One job: unstructured voice directions in,
+a verified route out, offline.
 
 ## What it does
 
