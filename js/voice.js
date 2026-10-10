@@ -1,10 +1,11 @@
 // Voice input: dictate directions, and hands-free answers during guidance ("yes", "haan", "skip", "repeat").
-// Uses Chrome's speech recogniser (needs network on most phones; on-device Whisper is the offline path).
+// Uses the phone's speech recognition service through Chrome (Google's engine on Android; works offline when the
+// language's offline pack is installed). On-device Whisper (stt.js) is the automatic fallback.
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 export const voiceAvailable = !!SR;
 
-const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN' };
+const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', tanglish: 'ta-IN', hinglish: 'hi-IN', auto: 'en-IN' };
 
 // One-shot dictation. onPartial gets the live transcript; resolves with the final text.
 export function dictate(lang = 'en', onPartial, onState) {
@@ -14,6 +15,7 @@ export function dictate(lang = 'en', onPartial, onState) {
     r.lang = RECOG_LANG[lang] || 'en-IN';
     r.interimResults = true;
     r.continuous = false;
+    r.maxAlternatives = 1;
     let text = '', finished = false;
     const finish = () => { if (finished) return; finished = true; clearTimeout(idle); resolve(text.trim()); };
     // Nothing recognised for 8 s: stop instead of waiting forever.

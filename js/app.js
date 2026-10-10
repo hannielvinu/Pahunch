@@ -629,36 +629,51 @@ $('#mic').onclick = async () => {
   sheet.classList.remove('speaking', 'offline');
   $('#vlive').textContent = 'Speak the directions in any language';
   $('#vtrans').textContent = '';
+  status.hidden = true;
+  const native = ['hi', 'ta', 'kn', 'ml', 'tanglish', 'hinglish'].includes(speechLang);
+  const done = (heard, english, ms) => {
+    $('#note').value = heard;
+    state.altNote = english && english !== heard ? english : null;
+    state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
+    state.lastVoice = { at: new Date().toLocaleTimeString(), chip: speechLang, heard, english: english || '', ms };
+  };
   try {
-    if (await sttAvailable()) {
-      // Offline, on-device Whisper: real waveform, live transcript, any language -> English for the parser.
+    let heard = '';
+    // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
+    if (voiceAvailable && speechEngine !== 'whisper') {
+      $('#vtitle').textContent = 'Listening…';
+      micStop = () => dictate.stop?.();
+      const t0 = performance.now();
+      try {
+        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m));
+        if (heard) done(heard, '', Math.round(performance.now() - t0));
+      } catch (e) {
+        if (!(await sttAvailable())) throw e; // nothing to fall back to
+        $('#vtitle').textContent = 'Switching to on-device Whisper…';
+      }
+    }
+    // 2) Fallback: on-device Whisper (works with no network and no speech pack).
+    if (!heard && (await sttAvailable())) {
       sheet.classList.add('offline');
       $('#vtitle').textContent = 'Listening · on-device';
       const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; }, onState: (m) => ($('#vtitle').textContent = m), getLang: () => speechLang });
       micStop = rec.stop;
       const r = await rec.done;
       if (r.text) {
-        // Native-language speech: plan from the speaker's own words (no translation errors); keep English as backup.
-        const native = ['hi', 'ta', 'kn', 'ml'].includes(speechLang) && r.original;
-        $('#note').value = native ? r.original : r.text;
-        state.altNote = native ? r.text : null;
-        state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
-        state.lastVoice = { at: new Date().toLocaleTimeString(), chip: speechLang, heard: r.original, english: r.text, ms: r.ms };
-        if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = native ? `English: "${r.text}" · on this phone in ${(r.ms / 1000).toFixed(1)} s` : `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
-        else status.hidden = true;
-      } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
-    } else {
-      $('#vtitle').textContent = 'Listening…';
-      micStop = () => dictate.stop?.();
-      const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; }, (m) => ($('#vtitle').textContent = m));
-      if (textOut) { $('#note').value = textOut; status.hidden = true; } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
+        heard = native && r.original ? r.original : r.text;
+        done(heard, r.text, r.ms);
+        if (heard !== r.text) { status.hidden = false; status.textContent = `English: "${r.text}"`; }
+      }
     }
-  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type instead, or run tools/get-whisper.sh for offline voice.`; }
+    if (!heard) { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
+  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type the directions instead.`; }
   sheet.hidden = true;
   btn.classList.remove('live');
 };
 
 let micStop = null;
+let speechEngine = 'auto';
+try { speechEngine = localStorage.getItem('pahunch.speechEngine') || 'auto'; } catch {}
 // Spoken language for offline voice: Auto, or pinned (much better for Hindi / Tamil / Kannada / Malayalam).
 let speechLang = 'auto';
 try { speechLang = localStorage.getItem('pahunch.speechLang') || 'auto'; } catch {}
@@ -685,6 +700,10 @@ $('#vlog-copy').onclick = async () => {
   try { await navigator.clipboard.writeText(txt); toast(`Copied ${l.length} voice attempts. Paste them to Claude.`); }
   catch { $('#sensors').textContent = txt; toast('Clipboard blocked: the log is shown in the panel; select and copy it.'); }
 };
+
+const engineLabel = () => ($('#engine-toggle').textContent = speechEngine === 'whisper' ? 'Speech: Whisper only (offline)' : 'Speech: phone engine (Whisper fallback)');
+$('#engine-toggle').onclick = () => { speechEngine = speechEngine === 'whisper' ? 'auto' : 'whisper'; try { localStorage.setItem('pahunch.speechEngine', speechEngine); } catch {} engineLabel(); };
+setTimeout(engineLabel, 0);
 
 // ---------- Field test: with vs without Pahunch ----------
 // "Without" runs are timed here (description + calls); "with" runs come from door cards (time to door).
@@ -744,15 +763,16 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (await sttAvailable()) {
+    if (voiceAvailable && speechEngine !== 'whisper') {
+      micStop = () => dictate.stop?.();
+      try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p)); } catch (e) { if (!(await sttAvailable())) throw e; }
+    }
+    if (!heard && (await sttAvailable())) {
       const rec = listen({ canvas: $('#s-wave'), onPartial: (t) => ($('#s-heard').textContent = t), getLang: () => speechLang });
       micStop = rec.stop;
       const r = await rec.done;
       heard = ['hi', 'ta', 'kn', 'ml'].includes(speechLang) && r.original ? r.original : r.text;
       if (heard !== r.text) build.alt = r.text;
-    } else {
-      micStop = () => dictate.stop?.();
-      heard = await dictate('en', (p) => ($('#s-heard').textContent = p));
     }
   } catch (e) { toast(`Voice: ${e.message}`); }
   btn.classList.remove('live'); btn.textContent = 'Speak';
