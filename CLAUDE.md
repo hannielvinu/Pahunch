@@ -72,3 +72,11 @@ parser step.at) and "Customer also said" (parser leftovers); ✓ only for distin
 cross-script via native.js translit; honest arrival (state.arriveBy); door card js/askcard.js (30 phrases, yes/no or
 numbers, CHECKED set empty until a native speaker checks). 108 removed from roles and partner demo. Pitch docs:
 ../FINAL_PITCH.md, ../PROJECT_BRIEF.md.
+
+## NPU engine (Sat night, untested on the phone)
+The PWA can't reach the NPU (WebNN on Android falls back to CPU). The model server can: llama.cpp's official Qualcomm
+Hexagon backend, built in CI (.github/workflows/npu-engine.yml, toolchain image ghcr.io/snapdragon-toolchain/arm64-android:v0.7),
+release "npu-engine" (bin + lib incl. libggml-htp-v73..v81). Termux: bash tools/get-npu.sh, bash tools/npu-bench.sh
+(CPU vs HTP0), NPU=1 bash tools/start.sh --bg (falls back to CPU; writes .llm-device=npu; app shows "Hexagon NPU").
+Env: LD_LIBRARY_PATH=$HOME/llama-npu/lib:/vendor/lib64, ADSP_LIBRARY_PATH=$HOME/llama-npu/lib. Only claim NPU after
+npu-bench shows ggml-hex lines and numbers. Whisper stays CPU, vision GPU.
