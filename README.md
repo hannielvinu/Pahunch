@@ -2,6 +2,8 @@
 
 **Maps get you to the lane. Pahunch gets you to the door.**
 
+*The phone call that finds the door:* Call mode puts the customer on speaker and shows the call as live captions in the rider's own language (translated on the phone), then turns the conversation into a route. Silent mode serves deaf and hard-of-hearing riders: every instruction is shown big and felt as vibration.
+
 In India, addresses are landmarks, not coordinates: *"Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke
 saamne neela gate."* Maps get a rider to the lane; the last 100 metres are still solved by phone calls.
 Pahunch reads the directions people already give (typed or spoken, in English, Hindi, Tamil, Kannada,
@@ -25,7 +27,7 @@ Built from scratch by **Hanniel Vinu** during the iQOO Hackathon 2026 Grand Fina
 | **Integrate** | Partner apps open Pahunch with one link carrying the customer's words: `index.html#go=<directions>&mode=delivery` (demo: `partner.html`). |
 | **Privacy** | A local-only network guard blocks any request that would leave the phone (it caught MediaPipe's usage telemetry); the chip shows "0 B sent · N blocked". |
 
-Modes: delivery rider, ambulance / 108 (no questions, torch, emergency prompts), ride pickup.
+Modes: delivery rider, deaf / hard-of-hearing rider (Silent mode), ambulance / 108 (no questions, torch, emergency prompts), ride pickup. Languages: English, Hindi, Tamil, Kannada, Malayalam, Bengali, plus Tanglish and Hinglish.
 
 ## Who uses it
 The **rider** (delivery partner, 108 ambulance crew, cab driver) is the user; the **customer** only does what they
