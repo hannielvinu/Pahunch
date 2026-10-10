@@ -5,10 +5,15 @@
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 export const voiceAvailable = !!SR;
 
+// Newer Chrome builds can run Web Speech recognition on the device ("processLocally"), which also works offline.
+export function localSpeechSupported() {
+  try { return !!SR && 'processLocally' in new SR(); } catch { return false; }
+}
+
 const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', tanglish: 'ta-IN', hinglish: 'hi-IN', auto: 'en-IN' };
 
 // One-shot dictation. onPartial gets the live transcript; resolves with the final text.
-export function dictate(lang = 'en', onPartial, onState) {
+export function dictate(lang = 'en', onPartial, onState, { local = false } = {}) {
   return new Promise((resolve, reject) => {
     if (!SR) return reject(new Error('speech recognition not available in this browser'));
     const r = new SR();
@@ -16,6 +21,7 @@ export function dictate(lang = 'en', onPartial, onState) {
     r.interimResults = true;
     r.continuous = false;
     r.maxAlternatives = 1;
+    if (local && 'processLocally' in r) r.processLocally = true; // on-device recogniser (offline capable)
     let text = '', finished = false;
     const finish = () => { if (finished) return; finished = true; clearTimeout(idle); resolve(text.trim()); };
     // Nothing recognised for 8 s: stop instead of waiting forever.

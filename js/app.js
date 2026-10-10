@@ -8,7 +8,7 @@ import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
 import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
-import { dictate, CommandListener, voiceAvailable } from './voice.js';
+import { dictate, CommandListener, voiceAvailable, localSpeechSupported } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
@@ -642,12 +642,13 @@ $('#mic').onclick = async () => {
   try {
     let heard = '';
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
-    if (voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
-      $('#vtitle').textContent = 'Listening…';
+    const offlineLocal = !navigator.onLine && localSpeechSupported();
+    if (voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || offlineLocal)) {
+      $('#vtitle').textContent = offlineLocal ? 'Listening · offline, on this phone' : 'Listening…';
       micStop = () => dictate.stop?.();
       const t0 = performance.now();
       try {
-        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m));
+        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m), { local: offlineLocal });
         if (heard) done(heard, '', Math.round(performance.now() - t0));
       } catch (e) {
         if (!(await sttAvailable())) throw e; // nothing to fall back to
