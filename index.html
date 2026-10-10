@@ -80,7 +80,7 @@
       <button id="mic" class="mic" aria-label="Speak directions"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></button>
     </div>
     <p id="mic-status" class="meta" hidden></p>
-    <div class="row">
+    <div class="row" hidden>
       <button id="paste" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg>Paste from laptop</button>
     </div>
     <button id="parse" class="btn primary big">Plan route<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
@@ -96,6 +96,7 @@
     <details id="sensors-panel" class="panel">
       <summary>Live sensors</summary>
       <pre id="sensors">starting…</pre>
+      <button id="selftest" class="btn ghost">Test voice and vibration</button>
     </details>
     <div hidden>
         <select id="voice">
@@ -105,7 +106,6 @@
           <option value="kn">ಕನ್ನಡ</option>
           <option value="ta">தமிழ்</option>
         </select>
-      </div>
         <select id="engine">
           <option value="auto">Auto: on-device AI + rules</option>
           <option value="native">On-device AI · llama.cpp (Termux)</option>

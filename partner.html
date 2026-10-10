@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Partner App Demo</title>
+  <link rel="icon" href="icons/favicon.png?v=3" type="image/png">
+  <style>
+    @font-face { font-family: Inter; src: url(lib/fonts/inter.woff2) format("woff2"); font-weight: 100 900; }
+    :root { --bg: #f4f5f7; --card: #fff; --text: #1c1c1c; --dim: #6b6f76; --line: #e8e9ec; --brand: #1f6feb; --pah: #e23744; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
+    header { background: var(--brand); color: #fff; padding: 18px 16px 22px; }
+    header small { opacity: .8; display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+    header h1 { margin: 4px 0 0; font-size: 22px; }
+    main { padding: 0 16px 32px; margin-top: -12px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin-inline: auto; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 1px 2px #0000000d, 0 8px 20px -14px #00000033; }
+    .label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+    .row { display: flex; justify-content: space-between; gap: 10px; }
+    .quote { background: #f7f8fa; border-left: 3px solid var(--brand); border-radius: 8px; padding: 10px 12px; margin: 8px 0 12px; font-size: 16px; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; border-radius: 12px; border: 0; font: 700 16px Inter, sans-serif; text-decoration: none; }
+    .btn.pah { background: var(--pah); color: #fff; box-shadow: 0 10px 22px -10px var(--pah); }
+    .btn.ghost { background: #fff; color: var(--text); border: 1px solid var(--line); margin-top: 8px; }
+    .btn svg { width: 22px; height: 22px; }
+    .note { color: var(--dim); font-size: 13px; text-align: center; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #e8f0fe; color: var(--brand); }
+    .tag.red { background: #fde8ea; color: var(--pah); }
+  </style>
+</head>
+<body>
+  <header>
+    <small>Partner rider app · demo integration</small>
+    <h1>Active order #4821</h1>
+  </header>
+  <main>
+    <section class="card">
+      <div class="row"><p class="label">Deliver to</p><span class="tag">8 min away</span></div>
+      <strong>Priya S. · Flat 2B</strong>
+      <p class="label" style="margin-top:12px">Customer's directions</p>
+      <div class="quote" id="d1">Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate. Doosri manzil.</div>
+      <a class="btn pah" id="go1"><svg viewBox="0 0 64 64"><path d="M32 9c-10 0-17.5 7.4-17.5 17.2C14.5 39 32 55 32 55s17.5-16 17.5-28.8C49.5 16.4 42 9 32 9z" fill="#fff"/><path d="M26 37V25a6 6 0 0 1 12 0v12z" fill="#e23744"/></svg>Guide me to the door</a>
+      <a class="btn ghost" href="#">Call customer</a>
+    </section>
+
+    <section class="card">
+      <div class="row"><p class="label">108 dispatch</p><span class="tag red">Emergency</span></div>
+      <div class="quote" id="d2">Exit gate se seedha, coffee counter ke baad right, red chair ke paas.</div>
+      <a class="btn pah" id="go2">Guide ambulance to the spot</a>
+    </section>
+
+    <p class="note">How partners integrate: one link (or the SDK) with the customer's own words. Pahunch opens on the rider's phone, plans the route on-device and guides to the door. Nothing is sent to a server.</p>
+  </main>
+  <script>
+    const link = (text, mode) => `index.html#go=${encodeURIComponent(text)}&mode=${mode}`;
+    document.getElementById('go1').href = link(document.getElementById('d1').textContent, 'delivery');
+    document.getElementById('go2').href = link(document.getElementById('d2').textContent, 'ambulance');
+  </script>
+</body>
+</html>

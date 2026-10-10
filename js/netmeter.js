@@ -19,6 +19,7 @@ export function tally(entries, into = { requests: 0, bytes: 0 }) {
     if (!isOffDevice(e.name)) continue;
     into.requests++;
     (into.hosts ||= new Set()).add(new URL(e.name).host);
+    (into.urls ||= []).length < 6 && into.urls.push(e.name.slice(0, 120));
     into.bytes += e.transferSize || e.encodedBodySize || 0;
   }
   return into;
@@ -30,6 +31,7 @@ export function formatBytes(n) {
 
 export function startNetMeter(onChange) {
   const total = { requests: 0, bytes: 0 };
+  startNetMeter.total = total;
   onChange(total);
   if (!('PerformanceObserver' in globalThis)) return total;
   try {

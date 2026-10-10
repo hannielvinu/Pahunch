@@ -1,3 +1,4 @@
+import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe } from './parser.js';
 import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
@@ -485,20 +486,23 @@ function renderDoors() {
 
 // ---------- Misc ----------
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 4000) {
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 4000);
+  toastTimer = setTimeout(() => (t.hidden = true), ms);
 }
 
-startNetMeter(({ requests, bytes, hosts }) => {
+function netChip({ requests, bytes, hosts } = startNetMeter.total || {}) {
   const chip = $('#net');
-  chip.onclick = () => toast(requests ? `Sent from this phone to: ${[...hosts].join(', ')}` : 'Nothing has left this phone.');
+  chip.onclick = () => { const u = startNetMeter.total?.urls || []; toast(requests ? `Left the phone: ${u.join('  |  ') || [...hosts].join(', ')}` : 'Nothing has left this phone.', 12000); };
   chip.classList.toggle('off', requests > 0);
-  chip.textContent = requests ? `⚠ ${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : 'On-device · 0 B sent';
-});
+  chip.textContent = requests ? `${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : `On-device · 0 B sent${blocked.length ? ` · ${blocked.length} blocked` : ''}`;
+  if (!requests && blocked.length) chip.onclick = () => toast(`Blocked from leaving the phone: ${blocked.join('  |  ')}`, 12000);
+}
+startNetMeter(netChip);
+guard.onBlock = () => netChip();
 deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
 renderDoors();
 
@@ -551,6 +555,15 @@ function setMode(mode) {
 document.querySelectorAll('.role').forEach((b) => (b.onclick = () => { setMode(b.dataset.mode); show('home'); }));
 $('#mode-badge').onclick = () => show('roles');
 
+$('#selftest').onclick = () => {
+  unlockSpeech();
+  const lang = state.lang || 'en';
+  say(text(lang).spotted('Pahunch voice'), lang);
+  const vib = navigator.vibrate ? navigator.vibrate([250, 120, 250]) : false;
+  const n = speechSynthesis?.getVoices?.().length ?? 0;
+  toast(`Voice: ${n} voices installed${n ? '' : ' (install Google Text-to-speech voices)'} · Vibration: ${vib ? 'sent' : 'blocked (check phone vibration / Do Not Disturb)'}`, 7000);
+};
+
 // ---------- Live sensors panel ----------
 setInterval(() => {
   if ($('#home').hidden || !$('#sensors-panel').open) return;
@@ -574,8 +587,17 @@ async function boot() {
   await new Promise((r) => setTimeout(r, Math.max(0, 1600 - (performance.now() - t0))));
   let saved = null;
   try { saved = localStorage.getItem('pahunch.mode'); } catch {}
-  setMode(saved || 'delivery');
-  show(saved ? 'home' : 'roles');
+  const link = new URLSearchParams(location.hash.slice(1));
+  if (link.get('go')) {
+    // Opened from a partner app (delivery / 108 dispatch): load its directions and plan straight away.
+    setMode(link.get('mode') || saved || 'delivery');
+    $('#note').value = link.get('go');
+    show('home');
+    setTimeout(() => $('#parse').click(), 300);
+  } else {
+    setMode(saved || 'delivery');
+    show(saved ? 'home' : 'roles');
+  }
   $('#splash').classList.add('out');
   setTimeout(() => ($('#splash').hidden = true), 450);
 }
