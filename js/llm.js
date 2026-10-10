@@ -312,7 +312,8 @@ async function nativeUp() {
 const NATIVE_JSON = false;
 const NATIVE_REWRITE = true; // rewriter (plain English line -> rules); false = the older line format
 const nativeBody = (note, extra) => JSON.stringify(NATIVE_REWRITE
-  ? { messages: messagesRewrite(note), temperature: 0, max_tokens: 90, cache_prompt: true, stop: ['\n'], ...extra }
+  // chat_template_kwargs: Qwen3 models would otherwise "think" first (slow); other chat templates ignore it.
+  ? { messages: messagesRewrite(note), temperature: 0, max_tokens: 90, cache_prompt: true, chat_template_kwargs: { enable_thinking: false }, ...extra }
   : NATIVE_JSON
   ? { messages: messagesJson(note), temperature: 0, max_tokens: 320, cache_prompt: true, response_format: { type: 'json_schema', json_schema: { name: 'route', schema: SCHEMA } }, ...extra }
   : { messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
@@ -422,7 +423,8 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
     stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
     if (backend === 'native' && NATIVE_REWRITE) {
-      const line = stats.out.split('\n')[0].replace(/^["'\s]+|["'\s]+$/g, '');
+      // First real line of the answer, ignoring any <think>…</think> block some models emit.
+      const line = (stats.out.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').split('\n').map((l) => l.trim()).find(Boolean) || '').replace(/^["'\s]+|["'\s]+$/g, '');
       const rw = parseRules(line);
       // Names in the rewrite must come from the customer's words (skipped for native-script notes: transliterated).
       for (const s of rw.steps) for (const lm of [s.landmark, s.ref?.landmark]) if (lm?.name) lm.name = cleanName(lm.name, note);
