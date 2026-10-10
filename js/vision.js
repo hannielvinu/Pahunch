@@ -23,7 +23,17 @@ export function wordMatches(seen, want) {
   if (seen === want) return true;
   if (want.length < 4 || seen.length < 3) return false;
   if (want.length >= 5 && seen.length >= 5 && (seen.startsWith(want) || want.startsWith(seen))) return true; // GANESH ~ GANESHA
+  if (want.length >= 7 && Math.abs(seen.length - want.length) <= 2) return lev(seen, want) <= 2;
   return editDistance(seen, want) <= 1;
+}
+
+function lev(a, b) {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let p = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; }
+  }
+  return d[b.length];
 }
 
 export function cleanWords(text) {
@@ -33,6 +43,9 @@ export function cleanWords(text) {
 // -> { hit: 'name' | 'type' | null, word }
 export function matchSigns(words, verify) {
   for (const want of verify.signs) { const w = words.find((s) => wordMatches(s, want)); if (w) return { hit: 'name', word: want }; }
+  // OCR often splits a sign ("MED PLUS"): also look in the words joined together.
+  const joined = words.join('');
+  for (const want of verify.signs) if (want.length >= 4 && joined.includes(want)) return { hit: 'name', word: want };
   for (const want of verify.alt) { const w = words.find((s) => wordMatches(s, want)); if (w) return { hit: 'type', word: want }; }
   return { hit: null, word: null };
 }
@@ -139,7 +152,10 @@ export class Vision {
       gzip: false,
       logger: (m) => onProgress?.(m),
     });
-    await this.worker.setParameters({ tessedit_pageseg_mode: '11' }); // sparse text: signs scattered in a scene
+    await this.worker.setParameters({
+      tessedit_pageseg_mode: '11', // sparse text: signs scattered in a scene
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&', // signs, not noise
+    });
     this.langs = langs;
     this.ocrLoadMs = Math.round(performance.now() - t0);
   }
@@ -190,8 +206,15 @@ export class Vision {
   // boxes: [{ text, tokens, x, y, w, h }] with x/y/w/h as fractions of the camera frame (0..1).
   async read() {
     if (!this.worker || this.ocrBusy) return null;
-    const ctx = this.grab(this.big, 1280);
-    if (!ctx) return null;
+    // Read the centre of the view (where the reticle is), enlarged: signs come out bigger and OCR is faster.
+    const v = this.video;
+    if (!v.videoWidth) return null;
+    const C = { x: 0.06, y: 0.1, w: 0.88, h: 0.7 };
+    const sw = v.videoWidth * C.w, sh = v.videoHeight * C.h;
+    this.big.width = 1280;
+    this.big.height = Math.round((1280 * sh) / sw);
+    const ctx = this.big.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, v.videoWidth * C.x, v.videoHeight * C.y, sw, sh, 0, 0, this.big.width, this.big.height);
     this.enhance(ctx, this.big.width, this.big.height);
     this.ocrBusy = true;
     const t0 = performance.now();
@@ -203,7 +226,7 @@ export class Vision {
       for (const w of read) {
         const tokens = cleanWords(w.text), b = w.bbox;
         if (!tokens.length || !b) continue;
-        boxes.push({ text: tokens.join(' '), tokens, x: b.x0 / W, y: b.y0 / H, w: (b.x1 - b.x0) / W, h: (b.y1 - b.y0) / H });
+        boxes.push({ text: tokens.join(' '), tokens, x: C.x + (b.x0 / W) * C.w, y: C.y + (b.y0 / H) * C.h, w: ((b.x1 - b.x0) / W) * C.w, h: ((b.y1 - b.y0) / H) * C.h });
       }
       this.lastOcrMs = Math.round(performance.now() - t0);
       return { words: cleanWords(read.map((w) => w.text).join(' ')), boxes, text: data.text, ms: this.lastOcrMs };
