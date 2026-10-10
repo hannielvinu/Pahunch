@@ -669,6 +669,31 @@ function renderLangs() {
 renderLangs();
 $('#vdone').onclick = () => micStop?.();
 
+// ---------- Field test: with vs without Pahunch ----------
+// "Without" runs are timed here (description + calls); "with" runs come from door cards (time to door).
+const TKEY = 'pahunch.trials';
+const loadTrials = () => { try { return JSON.parse(localStorage.getItem(TKEY) || '[]'); } catch { return []; } };
+const saveTrials = (t) => { try { localStorage.setItem(TKEY, JSON.stringify(t)); } catch {} };
+let run = null;
+function renderTrials() {
+  const base = loadTrials(), withP = loadCards().filter((c) => c.secs != null && !c.excluded);
+  const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  const b = avg(base.map((x) => x.secs)), w = avg(withP.map((c) => c.secs)), bc = avg(base.map((x) => x.calls));
+  $('#t-sum').textContent = [
+    `Without Pahunch: ${base.length} run(s)${b != null ? ` · avg ${Math.round(b)} s · ${bc.toFixed(1)} calls` : ''}`,
+    `With Pahunch:    ${withP.length} run(s)${w != null ? ` · avg ${Math.round(w)} s · 0 calls` : ''}`,
+    b != null && w != null ? `Saved:           ${Math.round(b - w)} s per delivery (${Math.round((1 - w / b) * 100)}%)` : 'Do at least one run of each to compare.',
+  ].join('\n');
+}
+$('#t-go').onclick = () => {
+  if (!run) { run = { at: performance.now(), calls: 0 }; $('#t-go').textContent = 'Found it · stop'; $('#t-call').disabled = false; return; }
+  const t = loadTrials(); t.push({ secs: Math.round((performance.now() - run.at) / 1000), calls: run.calls, when: Date.now() }); saveTrials(t);
+  run = null; $('#t-go').textContent = 'Start "without" run'; $('#t-call').disabled = true; $('#t-call').textContent = '+1 call'; renderTrials();
+};
+$('#t-call').onclick = () => { if (run) { run.calls++; $('#t-call').textContent = `+1 call (${run.calls})`; } };
+$('#t-clear').onclick = () => { if (confirm('Clear the "without" runs? Door cards are kept.')) { saveTrials([]); renderTrials(); } };
+$('#trials').addEventListener('toggle', renderTrials);
+
 // ---------- Step-by-step voice ----------
 // Short phrases are recognised far better than one long sentence. Each phrase is parsed on its own,
 // read back in the rider's language ("Ganesha கோவில் தாண்டி, சரியா?"), and kept only when confirmed.
