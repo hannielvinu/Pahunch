@@ -12,22 +12,28 @@ if [ -z "${MODEL:-}" ]; then
 fi
 echo "Model: $MODEL"
 
-# Prefer the llama.cpp built with the Adreno GPU (OpenCL) backend (tools/lunch-setup.sh); GPU=0 forces CPU.
-LLAMA_BIN=$(command -v llama-server)
-GPU_ARGS=""
-if [ "${GPU:-1}" = "1" ] && [ -x "$HOME/llama.cpp/build/bin/llama-server" ]; then
-  LLAMA_BIN="$HOME/llama.cpp/build/bin/llama-server"
-  GPU_ARGS="-ngl 99"
-  export LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64:${LD_LIBRARY_PATH:-}"  # Adreno libOpenCL.so
-  echo "Using llama.cpp with the Adreno GPU (OpenCL) backend"
-fi
-if [ -f "$MODEL" ] && [ -n "$LLAMA_BIN" ]; then
+wait_llm() { for i in $(seq 1 "$1"); do curl -s localhost:8081/health | grep -q ok && return 0; kill -0 "$LLAMA" 2>/dev/null || return 1; sleep 1; done; return 1; }
+CPU_BIN=$(command -v llama-server)
+GPU_BIN="$HOME/llama.cpp/build/bin/llama-server"
+if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
   pkill -f llama-server 2>/dev/null
-  # -t 4: CPU threads; -c 2048: prompt + few-shot examples; -ngl 99: all layers on the GPU (OpenCL build only).
-  "$LLAMA_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 $GPU_ARGS > llama.log 2>&1 &
-  LLAMA=$!
-  echo "On-device LLM starting (pid $LLAMA, log: llama.log)…"
-  for i in $(seq 1 60); do curl -s localhost:8081/health | grep -q ok && { echo "On-device LLM ready."; break; }; sleep 1; done
+  STARTED=""
+  # Try the Adreno GPU (OpenCL) build first if it exists (GPU=0 skips it); fall back to the CPU build.
+  # The vendor library path is set for this one process only.
+  if [ "${GPU:-1}" = "1" ] && [ -x "$GPU_BIN" ]; then
+    LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64" "$GPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 -ngl 99 > llama.log 2>&1 &
+    LLAMA=$!
+    echo "On-device LLM starting on the Adreno GPU (OpenCL)…"
+    if wait_llm 30; then STARTED=gpu; else echo "GPU build did not start (see llama.log); using CPU."; kill "$LLAMA" 2>/dev/null; cp llama.log llama-gpu.log 2>/dev/null; fi
+  fi
+  if [ -z "$STARTED" ] && [ -n "$CPU_BIN" ]; then
+    # -t 4: CPU threads; -c 2048: prompt + few-shot examples.
+    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
+    LLAMA=$!
+    echo "On-device LLM starting on the CPU (pid $LLAMA, log: llama.log)…"
+    wait_llm 60 && STARTED=cpu
+  fi
+  [ -n "$STARTED" ] && echo "On-device LLM ready ($STARTED)." || echo "On-device LLM failed to start: tail -20 llama.log"
 else
   echo "No LLM: run 'pkg install llama-cpp' and 'bash tools/get-models.sh' first. App still works with the rule parser."
 fi
