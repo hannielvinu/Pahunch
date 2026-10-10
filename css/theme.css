@@ -144,7 +144,9 @@ body[data-mode="ambulance"] .step-now { font-size: 32px; }
 /* Offline proof chip: bottom centre on normal screens, top right on the camera screen (under the HUD pills). */
 .net-chip { top: auto; right: auto; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom)); }
 body:has(#guide:not([hidden])) .net-chip { bottom: auto; top: calc(48px + env(safe-area-inset-top)); left: auto; right: 12px; transform: none; }
-body:has(#plan:not([hidden])) .net-chip, body:has(#arrive:not([hidden])) .net-chip { bottom: calc(88px + env(safe-area-inset-bottom)); }
+body:has(#arrive:not([hidden])) .net-chip { bottom: calc(88px + env(safe-area-inset-bottom)); }
+/* plan: the chip sits top-right, clear of the Start guidance button */
+body:has(#plan:not([hidden])) .net-chip { bottom: auto; top: calc(14px + env(safe-area-inset-top)); left: auto; right: 12px; transform: none; }
 .screen { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
 
 /* Zomato-like rhythm: bold red delivery accent, 12px-radius 48px buttons, white cards, small caps section labels */

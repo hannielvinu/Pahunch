@@ -54,24 +54,10 @@ function showCue(line) {
 }
 document.querySelectorAll('#haptic-legend [data-buzz]').forEach((b) => (b.onclick = () => navigator.vibrate?.(BUZZ[b.dataset.buzz])));
 
-// ---------- The AI pipeline, shown live: voice note -> English -> route -> rider's language ----------
-const PIPE = ['hear', 'english', 'route', 'rider'];
-const RIDER_LANG_NAME = { en: 'English', hi: 'हिन्दी', ta: 'தமிழ்', kn: 'ಕನ್ನಡ', ml: 'മലയാളം', bn: 'বাংলা' };
-function pipe(stage, skip = []) {
-  const k = PIPE.indexOf(stage);
-  $('#pipe').hidden = false;
-  const pick = $('#voice').value;
-  $('#pipe-rider').textContent = RIDER_LANG_NAME[pick] || 'Your language';
-  for (const li of document.querySelectorAll('#pipe li')) {
-    const i = PIPE.indexOf(li.dataset.p);
-    li.className = skip.includes(li.dataset.p) ? 'skip' : i < k ? 'done' : i === k ? 'now' : '';
-  }
-}
-
 // ---------- Router ----------
 const screens = ['roles', 'home', 'call', 'plan', 'guide', 'arrive'];
 function show(name) {
-  for (const s of screens) { const el2 = $(`#${s}`); const was = el2.hidden; el2.hidden = s !== name; if (was && !el2.hidden) { el2.classList.remove('enter'); void el2.offsetWidth; el2.classList.add('enter'); } }
+  for (const s of screens) $(`#${s}`).hidden = s !== name;
   if (name !== 'guide') stopGuide();
   if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 }
@@ -111,13 +97,11 @@ $('#parse').onclick = async () => {
   $('#thinking-out').textContent = '';
   const t0 = performance.now();
   // Her words -> English (on-device AI) -> route; English notes go straight to the route reader.
-  const nonEn = /[ऀ-෿]/.test(note) || parseRules(note).lang !== 'en';
-  if (!state.vnote && !state.order) pipe(nonEn ? 'english' : 'route', ['hear', ...(nonEn ? [] : ['english'])]); else pipe(nonEn ? 'english' : 'route', nonEn ? [] : ['english']);
-  if (nonEn) $('#thinking-status').textContent = 'Translating the directions to English on this phone…';
+  if (/[ऀ-෿]/.test(note) || parseRules(note).lang !== 'en') $('#thinking-status').textContent = 'Translating the directions to English on this phone…';
   const res = await understandNote(note, {
     mode: $('#engine').value,
     device: state.device,
-    onStatus: (s) => { $('#thinking-status').textContent = s; if (/route|model/i.test(s)) pipe('route', $('#pipe .skip') ? [...document.querySelectorAll('#pipe .skip')].map((l) => l.dataset.p) : []); },
+    onStatus: (s) => ($('#thinking-status').textContent = s),
     onToken: (t) => { bar.hidden = true; $('#thinking-status').textContent = 'On-device model is writing the route…'; $('#thinking-out').textContent = t; },
     onProgress: (p) => { bar.hidden = false; bar.value = p; $('#thinking-status').textContent = `Loading on-device model into the GPU… ${Math.round(p * 100)}%`; },
   });
@@ -235,7 +219,6 @@ AI understood: "${p.rewrite}"`;
     for (const [cls, label] of chips(s)) row.append(el('span', `tag ${cls}`, label));
     li.append(row);
     li.tabIndex = 0;
-    li.style.setProperty('--i', i);
     li.onclick = () => openEditor(i); // tap a step to fix it
     list.append(li);
   });
@@ -566,7 +549,7 @@ async function startGuide(from = 0) {
   try {
     await vision.startCamera();
   } catch (e) {
-    toast(`Camera unavailable: ${e.message}. Use Skip / Yes to step through.`);
+    toast(`Camera unavailable: ${e.message}. Use "I'm here" to step through.`);
   }
   try { state.wake = await navigator.wakeLock?.request('screen'); } catch {}
   const langs = ocrLangs(state.graph);
@@ -1193,7 +1176,6 @@ async function openVoiceNote(blob, { name = 'voice note', from = '', lang = '' }
   box.hidden = false;
   $('#thinking-out').textContent = '';
   $('#thinking-status').textContent = 'Listening to the voice note on this phone…';
-  pipe('hear');
   try {
     const r = await transcribeNote(blob, { lang: lang || speechLang, onProgress: (k, n) => ($('#thinking-status').textContent = n > 1 ? `Transcribing the voice note on this phone · part ${k} of ${n}…` : 'Transcribing the voice note on this phone…') });
     box.hidden = true;
