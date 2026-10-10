@@ -388,7 +388,7 @@ export function parseRules(input) {
       const before = lms.filter((lm) => lm.i < turnAt || atWord(lm) || (a.passAt >= 0 && a.passAt > turnAt && lm.i < a.passAt));
       for (const lm of before) push({ kind: 'pass', landmark: landmarkOut(lm) });
       if (pendingRef) { push({ kind: 'pass', landmark: pendingRef.landmark }); pendingRef = null; }
-      push({ kind: 'turn', turn: a.turn, ordinal: a.ordinal || 1, road: a.road });
+      push({ kind: 'turn', turn: a.turn, ordinal: a.ordinal || 1, ordinalSaid: !!a.ordinal, road: a.road });
       // "turn right, see the Remote PC text": landmarks after the turn come after it.
       for (const lm of lms) if (!before.includes(lm)) push({ kind: 'pass', landmark: landmarkOut(lm) });
       turnClause = graph.steps.at(-1)?.kind === 'turn';
@@ -396,6 +396,12 @@ export function parseRules(input) {
     }
     const afterTurn = turnClause;
     turnClause = false;
+    // "right, second lane" / "ডানদিকে দ্বিতীয় গলি": a number right after the turn word belongs to that turn.
+    const lastTurn = graph.steps.at(-1);
+    // (only when it names a lane or road: "randamathe veedu" is the second house, not the second turn)
+    if (afterTurn && a.ordinal && a.road && lastTurn?.kind === 'turn' && !lastTurn.ordinalSaid && a.toks.findIndex((t) => Object.values(ORD).some((o) => o.has(t.w))) <= 1) {
+      lastTurn.ordinal = a.ordinal; lastTurn.ordinalSaid = true; if (a.road) lastTurn.road = a.road;
+    }
     if (!lms.length) continue;
     if (afterTurn && lms.length === 1 && !a.rel && ['at', 'after', 'past', 'by', 'from'].includes(a.toks[0]?.w)) {
       graph.steps.splice(graph.steps.length - 1, 0, { at, kind: 'pass', landmark: landmarkOut(lms[0]) });

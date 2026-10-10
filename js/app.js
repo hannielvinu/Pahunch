@@ -1,6 +1,6 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords, leftovers } from './parser.js';
-import { parseNote, warmNative, complete, agrees, translateLine, llmDevice } from './llm.js';
+import { parseNote, warmNative, complete, agrees, translateLine, llmDevice, understandNote } from './llm.js';
 import { Vision, matchSigns, ocrLangs, distinctive } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
@@ -96,7 +96,9 @@ $('#parse').onclick = async () => {
   box.hidden = false;
   $('#thinking-out').textContent = '';
   const t0 = performance.now();
-  const res = await parseNote(note, {
+  // Her words -> English (on-device AI) -> route; English notes go straight to the route reader.
+  if (/[ऀ-෿]/.test(note) || parseRules(note).lang !== 'en') $('#thinking-status').textContent = 'Translating the directions to English on this phone…';
+  const res = await understandNote(note, {
     mode: $('#engine').value,
     device: state.device,
     onStatus: (s) => ($('#thinking-status').textContent = s),
@@ -132,7 +134,7 @@ $('#parse').onclick = async () => {
   state.lang = pick === 'auto' ? state.spokenLang || state.graph.lang : pick; // reply in the language that was spoken
   renderPlan();
   show('plan');
-  if (res.sure) crossCheck(note, state.graph);
+  if (res.sure && !res.english) crossCheck(note, state.graph);
 };
 
 // The rules read every word, so their plan is shown at once; the on-device model (Gemma 3n) still reads the
@@ -184,7 +186,9 @@ function renderPlan() {
     : st && !p.fallback
       ? `Route by rule parser (instant), cross-checked on this phone by ${ai} · language: ${g.lang}`
       : `Route read by the rule parser in ${g.ms} ms · language: ${g.lang}${p.fallback && p.fallback !== "no on-device model running" ? " · AI cross-check skipped (unclear answer)" : ""}`;
-  if (p.rewrite) $('#parsed-by').textContent += `
+  if (p.english) $('#parsed-by').textContent = `Translated to English on this phone by on-device AI${state.llmDevice ? ` (${state.llmDevice})` : ''} in ${((p.translateMs || 0) / 1000).toFixed(1)} s · route checked against the customer's own words
+In English: "${p.english}"`;
+  else if (p.rewrite) $('#parsed-by').textContent += `
 AI understood: "${p.rewrite}"`;
   $('#raw').hidden = !st;
   if (st) $('#raw-out').textContent = `Note: ${g.note}\n\n${st.out || '(empty)'}\n\n${st.tokensIn ?? '?'} prompt tokens (${st.cached ?? 0} from cache) · ${st.tokensOut ?? '?'} generated · ${(st.ms / 1000).toFixed(1)} s`;

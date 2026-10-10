@@ -493,6 +493,58 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   }
 }
 
+// ---------- Customer's words -> English -> route ----------
+// Step 1: a faithful English translation of the customer's directions, on this phone (Gemma 3n). Names stay as said,
+// and every turn, ordinal, colour, relation and floor is kept exactly: those are what the route is built from.
+const SYSTEM_EN = `You translate a customer's delivery directions into plain English for a delivery rider.
+The input may be Tamil, Hindi, Kannada, Malayalam, Bengali, English or a mix, in any script.
+Translate faithfully and completely, in the same order. Keep every landmark, shop, temple and street name as it is, in English letters.
+Keep left/right, first/second/third, colours, opposite / next to / near / behind / after, and floor numbers exactly as said.
+Do not add, explain or summarise anything. Output only the English, on one line.`;
+const SHOTS_EN = [
+  ['முருகன் கோவில் தாண்டி ரெண்டாவது தெருவுல ரைட், MedPlus எதிரே பச்சை கேட் வீடு, ரெண்டாவது மாடி',
+    'After the Murugan temple, take the second street on the right; the house with the green gate opposite MedPlus, second floor.'],
+  ['Main road se seedha aao, Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate',
+    'Come straight from the main road; after the Ganesh temple, take the second lane on the left; the blue gate opposite MedPlus.'],
+  ['ಬ್ಯಾಂಕ್ ದಾಟಿ ಎಡಕ್ಕೆ ತಿರುಗಿ, ಶಾಲೆ ಎದುರು ನೀಲಿ ಗೇಟ್ ಮನೆ, ಮೂರನೇ ಮಹಡಿ',
+    'After the bank, turn left; the house with the blue gate opposite the school, third floor.'],
+];
+export async function toEnglish(text) {
+  if (!text?.trim()) return null;
+  try {
+    const messages = [{ role: 'system', content: SYSTEM_EN }];
+    for (const [q, ans] of SHOTS_EN) messages.push({ role: 'user', content: q }, { role: 'assistant', content: ans });
+    messages.push({ role: 'user', content: text });
+    const r = await fetch(`${NATIVE_URL}/v1/chat/completions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ messages, temperature: 0, max_tokens: 160, cache_prompt: true, chat_template_kwargs: { enable_thinking: false } }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const out = (j.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+    const clean = out.replace(/^["'\s]+|["'\s]+$/g, '');
+    // A chat reply or a refusal is not a translation.
+    return clean && !/\b(i am|i'm|sorry|cannot|as an ai|language model)\b/i.test(clean) ? clean : null;
+  } catch { return null; }
+}
+
+// Step 2: understand the route from the English, and cross-check it against the customer's own words.
+// -> parseNote's result plus { english }. Turns, ordinals and floor that the rules read in her own words win
+// over the translation (ground()); if her words alone were fully understood, that exact reading is kept.
+export async function understandNote(note, opts = {}) {
+  const own = parseRules(note);
+  const t0 = performance.now();
+  const english = /[^\u0000-ɏ]/.test(note) || own.lang !== 'en' ? await toEnglish(note) : null;
+  const translateMs = Math.round(performance.now() - t0);
+  if (!english) return { ...(await parseNote(note, opts)), english: null };
+  opts.onStatus?.('Understanding the route…');
+  const res = await parseNote(english, { ...opts, mode: opts.mode === 'rules' ? 'rules' : 'auto' });
+  if (res.notRoute || !isRoute(res.graph)) return { ...(await parseNote(note, opts)), english };
+  const sure = isRoute(own) && !unknownWords(note, own).length;
+  const graph = sure ? own : Object.assign(ground(res.graph, own), { lang: own.lang, parser: res.graph.parser });
+  return { ...res, graph, rules: own, english, translateMs, sure, agree: agrees(res.graph, own) };
+}
+
 export { describe };
 
 // ---------- Translation (Call mode captions in the rider's language), same on-device model ----------

@@ -9,7 +9,7 @@ Phase 1 prototype: never copy from it).
 
 ## Hard rules
 - **Commits show only Hanniel.** No `Co-Authored-By: Claude`, no "Generated with Claude" lines.
-- Commit + push after every working change. Run all nine test files first (below); they must pass.
+- Commit + push after every working change. Run all ten test files first (below); they must pass.
 - Never claim the NPU or the Q3 chip runs a model. Truth: llama.cpp / whisper.cpp run on the CPU in Termux; vision
   runs on the Adreno GPU via MediaPipe. The OpenCL (GPU) llama.cpp build segfaults on this phone (GPU off by default).
 - Don't break the working demo. Safe tags: `cp1-safe`, `cp2-safe`. Feature freeze Sat 17:30 for Checkpoint 2 (19:00).
@@ -41,7 +41,7 @@ Phase 1 prototype: never copy from it).
 
 ## Measured (on the phone)
 - `node tools/eval-llm.mjs`: Gemma 3n E2B rewriter **7/7 at 5.0 s/route** (Qwen3-1.7B 4/7 at 3.8 s; old approaches 1/7–3/7).
-- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs && node tests/languages.test.mjs && node tests/heldout.test.mjs && node tests/vision.test.mjs && node tests/trust.test.mjs`
+- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs && node tests/languages.test.mjs && node tests/heldout.test.mjs && node tests/vision.test.mjs && node tests/trust.test.mjs && node tests/english.test.mjs`
 - Voice: `node tools/eval-voice.mjs` scores recordings in tests/voice/ (needs whisper-server + ffmpeg).
 
 ## Not directions / chat input (Sat 18:15)
@@ -80,3 +80,9 @@ release "npu-engine" (bin + lib incl. libggml-htp-v73..v81). Termux: bash tools/
 (CPU vs HTP0), NPU=1 bash tools/start.sh --bg (falls back to CPU; writes .llm-device=npu; app shows "Hexagon NPU").
 Env: LD_LIBRARY_PATH=$HOME/llama-npu/lib:/vendor/lib64, ADSP_LIBRARY_PATH=$HOME/llama-npu/lib. Only claim NPU after
 npu-bench shows ggml-hex lines and numbers. Whisper stays CPU, vision GPU.
+
+## Order words -> English -> route (Sun early)
+Instakart transcribes while the customer records (Chrome Web Speech, her chosen language; the shop UI doesn't name the
+engine, docs do) and she corrects the text. Pahunch: understandNote() = toEnglish() (Gemma, translation prompt + 3 shots)
+-> parseNote(english) -> ground() against parseRules(her words) (turn direction + ordinals she said win; trailing
+"right, second lane" ordinals attach to the turn when a road word follows). tests/english.test.mjs.

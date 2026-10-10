@@ -24,7 +24,10 @@ whose answer the rider can understand.
 1. **Customer** opens `instakart.html` (a demo quick-commerce shop, not a real brand), adds items, picks the language she
    speaks, and **records voice directions**. Her words appear live as she speaks (Chrome's Google speech recognition,
    online at order time) and she corrects them before placing the order. The order carries her checked words + voice.
-2. **Rider** (Pahunch, on the phone): the order pops up on the home screen → **Accept**. The voice note is
+2. **Rider** (Pahunch, on the phone): the order pops up on the home screen → **Accept**. Her words are **translated to
+   English on the phone** (Gemma 3n, a translation prompt that keeps names, turns, ordinals, colours and floors exact),
+   the route is read from the English and **cross-checked against her own words** (directions and ordinals she said win),
+   then shown in the rider's language. The voice note is
    (her checked words; Whisper on the phone only if an order has none) becomes numbered steps in **the rider's language** ("Guide me in: हिन्दी"), each with
    ▶ her own words, then guidance by voice, vibration and the camera.
 3. **Arrival:** the end of the customer's directions: "You've arrived" → **Mark as delivered** → Delivered on both
