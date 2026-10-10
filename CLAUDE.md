@@ -28,8 +28,8 @@ Phase 1 prototype: never copy from it).
   airplane mode when that language's offline pack is installed in the Google app. If it fails offline, the same sheet
   switches to on-device Whisper ("say it once more") and that language goes straight to Whisper until back online.
   Engine toggle (Live sensors): phone engine + Whisper / Whisper only / keyboard mic (Gboard, optional).
-  The Termux:API bridge (tools/stt-bridge.py) is no longer used: Termux:API records from the background, which
-  Android silences, hence "ERROR_NO_MATCH".
+  The Termux:API bridge (tools/stt-bridge.py) is no longer used. Likely cause of its "ERROR_NO_MATCH" (unconfirmed):
+  Termux:API records from the background, and Android gives background apps silent audio.
 - **Understanding**: `js/native.js` maps native-script route words (incl. transliterated English) to the parser's
   vocabulary. `js/parser.js` rule engine (exact, instant). `js/llm.js` **rewriter**: Gemma 3n rewrites any language/mix
   into ONE plain English route line ("go past the X, take the second left, then the Y opposite the Z, second floor"),
