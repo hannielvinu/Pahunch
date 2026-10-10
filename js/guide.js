@@ -38,12 +38,24 @@ if ('speechSynthesis' in globalThis) {
   speechSynthesis.addEventListener?.('voiceschanged', load);
 }
 
+function bestVoice(lang) {
+  const base = lang.split('-')[0];
+  let best = null, top = -1;
+  for (const v of voices) {
+    const l = v.lang.replace('_', '-');
+    const s = (l === lang ? 4 : l.startsWith(base) ? 2 : -9) + (/google/i.test(v.name) ? 1 : 0) + (v.localService ? 1 : 0) + (/female|network|enhanced|natural/i.test(v.name) ? 0.5 : 0);
+    if (s > top) { top = s; best = v; }
+  }
+  return top > 0 ? best : null;
+}
+
 export function say(line, lang = 'en') {
   if (!('speechSynthesis' in globalThis)) return;
   const u = new SpeechSynthesisUtterance(line);
   u.lang = VOICE_LANG[lang] || 'en-IN';
-  u.voice = voices.find((v) => v.lang.replace('_', '-') === u.lang) || null;
-  u.rate = 1;
+  u.voice = bestVoice(u.lang);
+  u.rate = 0.96;
+  u.pitch = 1;
   // Chrome on Android can drop an utterance queued right after cancel(); only cancel when something is playing.
   if (speechSynthesis.speaking || speechSynthesis.pending) {
     speechSynthesis.cancel();

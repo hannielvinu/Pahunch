@@ -23,9 +23,9 @@ const detector = new Detector($('#video'));
 const sensors = new Sensors();
 sensors.start();
 const MODES = {
-  delivery: { badge: '🛵 Delivery', title: 'Where to?', sub: 'Speak or paste the directions exactly as the customer gave them.' },
-  ambulance: { badge: '🚑 Ambulance', title: 'Emergency call', sub: 'Type or speak what the caller said. Pahunch guides without stopping to ask.' },
-  ride: { badge: '🚖 Pickup', title: 'Find your passenger', sub: 'Paste where they said they are waiting: "opposite the bus stop, blue shirt".' },
+  delivery: { badge: 'Delivery', title: 'Where to?', sub: 'Speak or paste the directions exactly as the customer gave them.' },
+  ambulance: { badge: 'Ambulance', title: 'Emergency call', sub: 'Type or speak what the caller said. Pahunch guides without stopping to ask.' },
+  ride: { badge: 'Pickup', title: 'Find your passenger', sub: 'Paste where they said they are waiting: "opposite the bus stop, blue shirt".' },
 };
 const ambulance = () => document.body.dataset.mode === 'ambulance';
 
@@ -405,7 +405,7 @@ function renderCard() {
   $('#locate').hidden = !!c.digipin || state.locating;
   $('#card-photo').hidden = !c.photo;
   if (c.photo) $('#card-photo').src = c.photo;
-  $('#photo-hint').textContent = c.photo ? 'Retake photo' : '📷 Take a photo of the door';
+  $('#photo-hint').textContent = c.photo ? 'Retake photo' : 'Take a photo of the door';
   $('#card-route').replaceChildren(...c.route.map((r) => el('li', null, r)));
   $('#arrived-time').textContent = `${c.secs != null ? `Time to door: ${c.secs} s · ` : ''}${new Date(c.at).toLocaleString()}`;
   renderQr(qrPayload(c));
@@ -509,7 +509,7 @@ const listener = new CommandListener((cmd) => {
   else if (cmd === 'skip') $('#skip').click();
   else if (cmd === 'repeat' && say.last) say(say.last.line, say.last.lang);
   else if (cmd === 'stop') $('#stop').click();
-}, (heard) => toast(`🎤 "${heard}"`));
+}, (heard) => toast(`Heard: "${heard}"`));
 $('#handsfree').onclick = () => {
   const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
   if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }

@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#f4f6fb">
   <title>Pahunch</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/logo.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon.png?v=3" type="image/png" sizes="48x48">
+  <link rel="icon" href="icons/logo.svg?v=3" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/favicon.png?v=3">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/theme.css">
   <script src="lib/tesseract/tesseract.min.js" defer></script>
@@ -17,6 +19,19 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--accent-2)"/></linearGradient>
+      <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+      <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+      <symbol id="i-scooter" viewBox="0 0 24 24"><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="17" r="2.5"/><path d="M8.5 17h7M15 6h3l1.5 8.5M4 13h8l2.5-5"/><rect x="3" y="7" width="6" height="6" rx="1"/></symbol>
+      <symbol id="i-ambulance" viewBox="0 0 24 24"><path d="M2 16V8a1 1 0 0 1 1-1h11v9M14 10h4l3 3.5V16h-7"/><circle cx="6.5" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/><path d="M8 9.5v4M6 11.5h4"/></symbol>
+      <symbol id="i-car" viewBox="0 0 24 24"><path d="M5 16v-4l2-5h10l2 5v4M3 16h18M7 12h10"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
       <symbol id="logo" viewBox="0 0 64 64">
         <rect width="64" height="64" rx="18" fill="url(#lg)"/>
         <path d="M32 11c-9.4 0-16.5 7-16.5 16.2C15.5 39 32 53 32 53s16.5-14 16.5-25.8C48.5 18 41.4 11 32 11z" fill="#fff"/>
@@ -46,9 +61,9 @@
     <header class="topbar"><svg class="mark"><use href="#logo"/></svg><strong>Pahunch</strong></header>
     <h2>Who's navigating?</h2>
     <p class="meta">Same engine, tuned for the job.</p>
-    <button class="role" data-mode="delivery"><span class="ico">🛵</span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
-    <button class="role" data-mode="ambulance"><span class="ico">🚑</span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
-    <button class="role" data-mode="ride"><span class="ico">🚖</span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
+    <button class="role" data-mode="delivery"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-scooter"/></svg></span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
+    <button class="role" data-mode="ambulance"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-ambulance"/></svg></span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
+    <button class="role" data-mode="ride"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-car"/></svg></span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
   </section>
 
   <section id="home" class="screen" hidden>
@@ -62,13 +77,13 @@
     </div>
     <div class="note-box">
       <textarea id="note" rows="5" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
-      <button id="mic" class="mic" aria-label="Speak directions"><span>🎤</span></button>
+      <button id="mic" class="mic" aria-label="Speak directions"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></button>
     </div>
     <p id="mic-status" class="meta" hidden></p>
     <div class="row">
-      <button id="paste" class="btn ghost">📋 Paste from laptop</button>
+      <button id="paste" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg>Paste from laptop</button>
     </div>
-    <button id="parse" class="btn primary big">Plan route →</button>
+    <button id="parse" class="btn primary big">Plan route<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
     <div id="thinking" class="thinking" hidden>
       <p id="thinking-status" class="meta"></p>
       <progress id="thinking-progress" max="1" hidden></progress>
@@ -104,7 +119,7 @@
   </section>
 
   <section id="plan" class="screen" hidden>
-    <header class="topbar"><button id="edit" class="back" aria-label="Back">←</button><strong>Route plan</strong></header>
+    <header class="topbar"><button id="edit" class="back" aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><strong>Route plan</strong></header>
     <p id="parsed-by" class="meta"></p>
     <div id="agree" class="agree" hidden style="display:none !important">
       <span id="agree-text"></span>
@@ -146,21 +161,21 @@
     <div class="hud bottom">
       <div class="meta stats"><span id="det-ms"></span><span id="ocr-ms"></span><span id="heading"></span></div>
       <div class="row">
-        <button id="stop" class="btn ghost">✕</button>
-        <button id="handsfree" class="btn ghost" aria-pressed="false">🎤 Hands-free</button>
-        <button id="skip" class="btn ghost">Skip ›</button>
+        <button id="stop" class="btn ghost icon-btn" aria-label="Stop"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button id="handsfree" class="btn ghost" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Hands-free</button>
+        <button id="skip" class="btn ghost">Skip<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
         <button id="turned" class="btn primary" hidden>I've turned</button>
       </div>
     </div>
   </section>
 
   <section id="arrive" class="screen arrive" hidden>
-    <div id="tick" class="tick">✓</div>
+    <div id="tick" class="tick"><svg class="i xl" aria-hidden="true"><use href="#i-check"/></svg></div>
     <h2 id="arrive-title">You've arrived</h2>
     <article id="card" class="card">
       <label class="photo" for="photo-in">
         <img id="card-photo" alt="Door photo" hidden>
-        <span id="photo-hint">📷 Take a photo of the door</span>
+        <svg class="i lg" aria-hidden="true"><use href="#i-camera"/></svg><span id="photo-hint">Take a photo of the door</span>
       </label>
       <input id="photo-in" type="file" accept="image/*" capture="environment" hidden>
       <p id="arrived-what" class="big-meta"></p>
@@ -175,9 +190,9 @@
       <p id="arrived-time" class="meta"></p>
     </article>
     <div class="row">
-      <button id="send" class="btn ghost">Send to laptop</button>
-      <button id="locate" class="btn ghost" hidden>Retry GPS</button>
-      <button id="del" class="btn ghost" hidden>Delete</button>
+      <button id="send" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg>Send to laptop</button>
+      <button id="locate" class="btn ghost" hidden><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg>Retry GPS</button>
+      <button id="del" class="btn ghost" hidden><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg>Delete</button>
     </div>
     <button id="again" class="btn primary big">New route</button>
   </section>
