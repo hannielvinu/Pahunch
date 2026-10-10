@@ -246,3 +246,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .etext { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 14px; font: 17px Inter, sans-serif; }
 .erow { flex-wrap: nowrap; }
 .erow .btn { flex: 1; }
+#ssheet .vwave { display: block; height: 56px; }
+#s-mic.live { animation: live 1s ease-in-out infinite; }
+#s-list { align-self: stretch; text-align: left; }

@@ -669,6 +669,77 @@ function renderLangs() {
 renderLangs();
 $('#vdone').onclick = () => micStop?.();
 
+// ---------- Step-by-step voice ----------
+// Short phrases are recognised far better than one long sentence. Each phrase is parsed on its own,
+// read back in the rider's language ("Ganesha கோவில் தாண்டி, சரியா?"), and kept only when confirmed.
+const CONFIRM_Q = { en: 'Right?', hi: 'ठीक है?', ta: 'சரியா?', kn: 'ಸರಿನಾ?', ml: 'ശരിയാണോ?' };
+const VOICE_OF = { tanglish: 'ta', hinglish: 'hi', auto: 'en' };
+let build = null;
+const buildLang = () => VOICE_OF[speechLang] || speechLang || 'en';
+function stepWords(st, lang) {
+  const T2 = text(lang);
+  if (st.kind === 'turn') return T2.turn(st.ordinal, T2[st.turn]);
+  return localName(st.landmark, lang);
+}
+function renderBuild() {
+  $('#s-title').textContent = `Step ${build.steps.length + 1}`;
+  $('#s-list').replaceChildren(...build.steps.map((s) => el('li', null, describe({ ...s, kind: s.kind === 'arrive' ? 'pass' : s.kind }))));
+  $('#s-ok').hidden = !build.pending;
+  $('#s-got').textContent = build.pending ? build.pending.map((s) => describe({ ...s, kind: s.kind === 'arrive' ? 'pass' : s.kind })).join(' → ') : '';
+}
+$('#stepmode').onclick = () => {
+  unlockSpeech();
+  build = { steps: [], pending: null };
+  $('#s-heard').textContent = '';
+  $('#ssheet').hidden = false;
+  renderBuild();
+};
+$('#s-cancel').onclick = () => { micStop?.(); $('#ssheet').hidden = true; build = null; };
+$('#s-mic').onclick = async () => {
+  const btn = $('#s-mic');
+  if (btn.classList.contains('live')) return micStop?.();
+  btn.classList.add('live'); btn.textContent = 'Listening… tap to stop';
+  build.pending = null; renderBuild();
+  let heard = '';
+  try {
+    if (await sttAvailable()) {
+      const rec = listen({ canvas: $('#s-wave'), onPartial: (t) => ($('#s-heard').textContent = t), getLang: () => speechLang });
+      micStop = rec.stop;
+      const r = await rec.done;
+      heard = ['hi', 'ta', 'kn', 'ml'].includes(speechLang) && r.original ? r.original : r.text;
+      if (heard !== r.text) build.alt = r.text;
+    } else {
+      micStop = () => dictate.stop?.();
+      heard = await dictate('en', (p) => ($('#s-heard').textContent = p));
+    }
+  } catch (e) { toast(`Voice: ${e.message}`); }
+  btn.classList.remove('live'); btn.textContent = 'Speak';
+  $('#s-heard').textContent = heard ? `"${heard}"` : 'Didn’t catch that. Tap Speak and try again.';
+  if (!heard) return;
+  let steps = parseRules(heard).steps.filter((s) => s.kind === 'turn' || s.landmark);
+  if (!steps.length && build.alt) steps = parseRules(build.alt).steps.filter((s) => s.kind === 'turn' || s.landmark);
+  build.alt = null;
+  if (!steps.length) { toast('No landmark or turn in that. Try "second left" or "Ganesh mandir".'); return; }
+  build.pending = steps;
+  renderBuild();
+  const lang = buildLang();
+  say(`${steps.map((s) => stepWords(s, lang)).join(', ')}. ${CONFIRM_Q[lang] || CONFIRM_Q.en}`, lang);
+  buzz('ask');
+};
+$('#s-ok').onclick = () => { build.steps.push(...build.pending); build.pending = null; $('#s-heard').textContent = ''; renderBuild(); buzz('spotted'); };
+$('#s-done').onclick = () => {
+  if (build.pending) build.steps.push(...build.pending);
+  if (!build.steps.length) return toast('Say at least one step first.');
+  const g = { floor: null, lang: buildLang(), parser: 'rules', steps: build.steps.map((s) => ({ ...s })), note: build.steps.map(describe).join(', '), ms: 0 };
+  renumber(g);
+  $('#ssheet').hidden = true; build = null;
+  state.parse = { rules: g };
+  state.graph = g;
+  state.lang = g.lang;
+  renderPlan();
+  show('plan');
+};
+
 // ---------- Modes ----------
 function setMode(mode) {
   const m = MODES[mode] ? mode : 'delivery';

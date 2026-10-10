@@ -80,6 +80,7 @@
       <button id="mic" class="mic" aria-label="Speak directions"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></button>
     </div>
     <p id="mic-status" class="meta" hidden></p>
+    <button id="stepmode" class="link">Speak step by step</button>
     <div class="row" hidden>
       <button id="paste" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg>Paste from laptop</button>
     </div>
@@ -208,6 +209,26 @@
       <p id="vtrans" class="meta"></p>
       <div id="vlangs" class="vlangs" aria-label="Spoken language"></div>
       <button id="vdone" class="btn primary big">Done</button>
+    </div>
+  </div>
+
+  <!-- Step-by-step voice: one part of the route at a time, read back for a yes -->
+  <div id="ssheet" class="vsheet" hidden>
+    <div class="vcard">
+      <p id="s-title" class="vtitle">Step 1</p>
+      <p class="meta">Say one part of the route, like "Ganesh mandir ke baad" or "second left".</p>
+      <ol id="s-list" class="card-route"></ol>
+      <canvas id="s-wave" class="vwave" aria-hidden="true"></canvas>
+      <p id="s-heard" class="vlive"></p>
+      <p id="s-got" class="big-meta"></p>
+      <div class="row erow">
+        <button id="s-mic" class="btn primary">Speak</button>
+        <button id="s-ok" class="btn ghost" hidden>Correct, next</button>
+      </div>
+      <div class="row erow">
+        <button id="s-cancel" class="btn ghost">Cancel</button>
+        <button id="s-done" class="btn ghost">Destination reached · plan</button>
+      </div>
     </div>
   </div>
 
