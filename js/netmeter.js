@@ -18,6 +18,7 @@ export function tally(entries, into = { requests: 0, bytes: 0 }) {
   for (const e of entries) {
     if (!isOffDevice(e.name)) continue;
     into.requests++;
+    (into.hosts ||= new Set()).add(new URL(e.name).host);
     into.bytes += e.transferSize || e.encodedBodySize || 0;
   }
   return into;

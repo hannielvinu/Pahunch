@@ -42,6 +42,8 @@ window.addEventListener('hashchange', () => {
 });
 
 // ---------- Home ----------
+let demoIdx = 0;
+$('#demo').onclick = () => { const notes = Object.values(SAMPLES); $('#note').value = notes[demoIdx++ % notes.length]; };
 for (const [lang, note] of Object.entries(SAMPLES)) {
   const b = el('button', 'chip', { en: 'Try English', hi: 'Hinglish', kn: 'Kannada', ta: 'Tamil' }[lang] || lang);
   b.onclick = () => { $('#note').value = note; };
@@ -116,7 +118,8 @@ function chips(step) {
 function renderPlan() {
   const g = state.graph, p = state.parse || {}, st = p.stats;
   const ai = st ? `${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s` : '';
-  $('#parsed-by').textContent = g.parser === 'llm' && st
+  $('#parsed-by').textContent = `Understood on this phone in ${st && !p.fallback ? (st.ms / 1000).toFixed(1) + ' s' : g.ms + ' ms'}${st && !p.fallback ? ` · ${st.model.replace(/\.gguf$/, '')}` : ''}`;
+  if (false) $('#parsed-by').textContent = g.parser === 'llm' && st
     ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
     : st && !p.fallback
       ? `Route by rule parser (instant), cross-checked on this phone by ${ai} · language: ${g.lang}`
@@ -331,7 +334,7 @@ async function startGuide() {
     toast(`Camera unavailable: ${e.message}. Use Skip / Yes to step through.`);
   }
   try { state.wake = await navigator.wakeLock?.request('screen'); } catch {}
-  if (!vision.worker) {
+  if (!vision.worker && !LITE) {
     $('#ocr-ms').textContent = 'loading OCR…';
     try { await vision.loadOcr('eng'); } catch (e) { toast(`OCR failed: ${e.message}`); }
   }
@@ -490,8 +493,9 @@ function toast(msg) {
   toastTimer = setTimeout(() => (t.hidden = true), 4000);
 }
 
-startNetMeter(({ requests, bytes }) => {
+startNetMeter(({ requests, bytes, hosts }) => {
   const chip = $('#net');
+  chip.onclick = () => toast(requests ? `Sent from this phone to: ${[...hosts].join(', ')}` : 'Nothing has left this phone.');
   chip.classList.toggle('off', requests > 0);
   chip.textContent = requests ? `⚠ ${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : 'On-device · 0 B sent';
 });
@@ -520,16 +524,20 @@ $('#mic').onclick = async () => {
   unlockSpeech();
   const btn = $('#mic'), status = $('#mic-status');
   if (btn.classList.contains('live')) { dictate.stop?.(); return; }
-  const lang = $('#voice').value === 'auto' ? 'en' : $('#voice').value;
   btn.classList.add('live');
-  status.hidden = false;
-  status.textContent = 'Listening… speak the directions';
+  const sheet = $('#vsheet');
+  sheet.hidden = false;
+  sheet.classList.remove('speaking');
+  $('#vlive').textContent = 'Speak the directions in any language';
   try {
-    const textOut = await dictate(lang, (p) => { $('#note').value = p; });
-    if (textOut) { $('#note').value = textOut; status.textContent = '✓ Got it. Tap Plan route.'; } else status.textContent = 'Didn’t catch that. Try again.';
-  } catch (e) { status.textContent = `Voice: ${e.message}. Type or paste instead.`; }
+    const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; });
+    if (textOut) { $('#note').value = textOut; status.hidden = true; } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
+  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type or paste instead.`; }
+  sheet.hidden = true;
   btn.classList.remove('live');
 };
+
+$('#vdone').onclick = () => dictate.stop?.();
 
 // ---------- Modes ----------
 function setMode(mode) {

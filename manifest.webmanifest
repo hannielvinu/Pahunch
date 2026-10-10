@@ -8,5 +8,5 @@
   "orientation": "portrait",
   "background_color": "#f4f6fb",
   "theme_color": "#4f46e5",
-  "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [{ "src": "icons/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

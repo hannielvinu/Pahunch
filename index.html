@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f4f6fb">
   <title>Pahunch</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/theme.css">
   <script src="lib/tesseract/tesseract.min.js" defer></script>
@@ -67,7 +67,6 @@
     <p id="mic-status" class="meta" hidden></p>
     <div class="row">
       <button id="paste" class="btn ghost">📋 Paste from laptop</button>
-      <div id="samples" class="chips" aria-label="Sample notes"></div>
     </div>
     <button id="parse" class="btn primary big">Plan route →</button>
     <div id="thinking" class="thinking" hidden>
@@ -83,10 +82,7 @@
       <summary>Live sensors</summary>
       <pre id="sensors">starting…</pre>
     </details>
-    <details class="panel">
-      <summary>Settings</summary>
-      <div class="row">
-        <label class="label inline" for="voice">Voice</label>
+    <div hidden>
         <select id="voice">
           <option value="auto">Auto (same as note)</option>
           <option value="en">English</option>
@@ -95,29 +91,28 @@
           <option value="ta">தமிழ்</option>
         </select>
       </div>
-      <div class="row">
-        <label class="label inline" for="engine">Parser</label>
         <select id="engine">
           <option value="auto">Auto: on-device AI + rules</option>
           <option value="native">On-device AI · llama.cpp (Termux)</option>
           <option value="browser">On-device AI · WebGPU (in Chrome)</option>
           <option value="rules">Rule parser only (instant)</option>
         </select>
-      </div>
-      <pre id="device">checking…</pre>
-    </details>
+      <pre id="device"></pre>
+    </div>
+    <button id="demo" class="link">Load demo route</button>
+    <div id="samples" hidden></div>
   </section>
 
   <section id="plan" class="screen" hidden>
     <header class="topbar"><button id="edit" class="back" aria-label="Back">←</button><strong>Route plan</strong></header>
     <p id="parsed-by" class="meta"></p>
-    <div id="agree" class="agree" hidden>
+    <div id="agree" class="agree" hidden style="display:none !important">
       <span id="agree-text"></span>
       <button id="use-other" class="btn ghost" hidden></button>
     </div>
     <ol id="steps" class="steps"></ol>
     <p id="floor" class="meta big-meta"></p>
-    <details id="raw" class="panel" hidden>
+    <details id="raw" class="panel" hidden style="display:none !important">
       <summary>On-device model output</summary>
       <pre id="raw-out"></pre>
     </details>
@@ -186,6 +181,16 @@
     </div>
     <button id="again" class="btn primary big">New route</button>
   </section>
+
+  <!-- Voice: live waves + live transcript -->
+  <div id="vsheet" class="vsheet" hidden>
+    <div class="vcard">
+      <p class="vtitle">Listening…</p>
+      <div class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p id="vlive" class="vlive">Speak the directions in any language</p>
+      <button id="vdone" class="btn primary big">Done</button>
+    </div>
+  </div>
 
   <div id="net" class="net-chip" title="Requests to anything other than this phone, measured by the browser">On-device · 0 B sent</div>
   <div id="toast" class="toast" hidden></div>
