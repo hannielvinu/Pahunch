@@ -7,7 +7,7 @@ const here = (p) => new URL(p, location.href).href;
 
 // ImageNet label -> appearance tag
 const GROUPS = {
-  temple: ['stupa', 'palace', 'church', 'mosque', 'monastery', 'altar', 'bell cote', 'castle', 'dome', 'triumphal arch', 'obelisk', 'pedestal'],
+  temple: ['stupa', 'palace', 'church', 'mosque', 'monastery', 'altar', 'bell cote', 'castle', 'dome', 'triumphal arch', 'obelisk', 'pedestal', 'cliff dwelling', 'megalith', 'library', 'planetarium', 'vault', 'organ', 'throne', 'prayer rug', 'brass', 'gong'],
   gate: ['sliding door', 'picket fence', 'worm fence', 'chain-link fence', 'chainlink fence', 'grille', 'turnstile', 'prison', 'window screen', 'iron', 'stone wall'],
   shop: ['grocery store', 'bookshop', 'toyshop', 'barbershop', 'confectionery', 'shoe shop', 'tobacco shop', 'butcher shop', 'bakery', 'restaurant', 'cinema', 'pill bottle', 'pharmacy'],
   petrol: ['gas pump'],
@@ -29,7 +29,7 @@ export class Scene {
     if (this.ready) return;
     const { FilesetResolver, ImageClassifier } = await import('../lib/mediapipe/vision_bundle.mjs');
     const files = await FilesetResolver.forVisionTasks(here('lib/mediapipe/wasm'));
-    const opts = (delegate) => ({ baseOptions: { modelAssetPath: here('lib/detector/efficientnet_lite0.tflite'), delegate }, runningMode: 'VIDEO', maxResults: 5, scoreThreshold: 0.08 });
+    const opts = (delegate) => ({ baseOptions: { modelAssetPath: here('lib/detector/efficientnet_lite0.tflite'), delegate }, runningMode: 'VIDEO', maxResults: 10, scoreThreshold: 0.03 });
     try { this.clf = await ImageClassifier.createFromOptions(files, opts('GPU')); } catch { this.clf = await ImageClassifier.createFromOptions(files, opts('CPU')); }
     this.ready = true;
   }
@@ -45,7 +45,9 @@ export class Scene {
     for (const c of res.classifications?.[0]?.categories || []) {
       const label = (c.categoryName || c.displayName || '').toLowerCase();
       const tag = TAG_OF[label] || Object.entries(TAG_OF).find(([l]) => label.includes(l))?.[1];
-      if (tag && !seen.has(tag)) seen.set(tag, { tag, label, score: c.score });
+      if (!tag) continue;
+      const cur = seen.get(tag);
+      if (cur) cur.score += c.score; else seen.set(tag, { tag, label, score: c.score });
     }
     this.top = res.classifications?.[0]?.categories?.[0];
     this.tags = [...seen.values()].sort((a, b) => b.score - a.score);

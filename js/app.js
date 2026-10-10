@@ -96,6 +96,7 @@ $('#parse').onclick = async () => {
   }
   state.parse = res;
   state.graph = res.graph;
+  if (state.lastVoice) { logVoice({ ...state.lastVoice, used: note, plan: res.graph.steps.map(describe).join(' → '), engine: res.graph.parser }); state.lastVoice = null; }
   state.graph.ms = Math.round((performance.now() - t0) * 10) / 10;
   state.graph.note = note;
   if (res.stats) state.inferences.push({ at: Date.now(), ...res.stats });
@@ -389,11 +390,12 @@ function onDetections(dets) {
 function onScene(tags) {
   const chip = $('#scene-chip');
   const top = tags[0];
-  chip.hidden = !top || top.score < 0.15;
+  chip.hidden = !top && !scene.top;
   if (top) chip.textContent = `Looks like: ${top.tag} ${Math.round(top.score * 100)}%`;
+  else if (scene.top) { chip.hidden = false; chip.textContent = `Sees: ${scene.top.categoryName || scene.top.displayName} ${Math.round(scene.top.score * 100)}%`; }
   const s = step();
   const want = s && s.kind !== 'turn' ? TYPE_TAG[s.landmark?.type] : null;
-  const hit = want && tags.find((t) => t.tag === want && t.score >= 0.2);
+  const hit = want && tags.find((t) => t.tag === want && t.score >= 0.12);
   chip.classList.toggle('good', !!hit);
   state.sceneHits = hit ? (state.sceneHits || 0) + 1 : 0;
   if (state.sceneHits < 2 || state.asking) return;
@@ -641,6 +643,7 @@ $('#mic').onclick = async () => {
         $('#note').value = native ? r.original : r.text;
         state.altNote = native ? r.text : null;
         state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
+        state.lastVoice = { at: new Date().toLocaleTimeString(), chip: speechLang, heard: r.original, english: r.text, ms: r.ms };
         if (r.original && r.original.toLowerCase() !== r.text.toLowerCase()) { status.hidden = false; status.textContent = native ? `English: "${r.text}" · on this phone in ${(r.ms / 1000).toFixed(1)} s` : `Heard: "${r.original}" · translated on this phone in ${(r.ms / 1000).toFixed(1)} s`; }
         else status.hidden = true;
       } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
@@ -668,6 +671,20 @@ function renderLangs() {
 }
 renderLangs();
 $('#vdone').onclick = () => micStop?.();
+
+// ---------- Voice log (what was heard -> what was planned), to diagnose real failures ----------
+const VKEY = 'pahunch.voicelog';
+function logVoice(entry) {
+  try { const l = JSON.parse(localStorage.getItem(VKEY) || '[]'); l.push(entry); localStorage.setItem(VKEY, JSON.stringify(l.slice(-15))); } catch {}
+}
+$('#vlog-copy').onclick = async () => {
+  let l = [];
+  try { l = JSON.parse(localStorage.getItem(VKEY) || '[]'); } catch {}
+  if (!l.length) return toast('No voice attempts logged yet: use the mic, then Plan route.');
+  const txt = l.map((e, i) => `#${i + 1} ${e.at} chip=${e.chip} ${(e.ms / 1000).toFixed(1)}s\n heard:   ${e.heard}\n english: ${e.english}\n used:    ${e.used}\n plan:    ${e.plan} [${e.engine}]`).join('\n\n');
+  try { await navigator.clipboard.writeText(txt); toast(`Copied ${l.length} voice attempts. Paste them to Claude.`); }
+  catch { $('#sensors').textContent = txt; toast('Clipboard blocked: the log is shown in the panel; select and copy it.'); }
+};
 
 // ---------- Field test: with vs without Pahunch ----------
 // "Without" runs are timed here (description + calls); "with" runs come from door cards (time to door).
