@@ -275,11 +275,12 @@ async function nativeUp() {
 
 // cache_prompt keeps the system prompt + examples in llama.cpp's KV cache, so after the first call
 // only the customer's note has to be read.
-const nativeBody = (note, extra) => JSON.stringify({
-  messages: messagesJson(note), temperature: 0, max_tokens: 320, cache_prompt: true,
-  response_format: { type: 'json_schema', json_schema: { name: 'route', schema: SCHEMA } },
-  ...extra,
-});
+// Measured on the phone: the JSON-schema answer was ~3x longer (8.3 s/route) and no more accurate for a
+// 1.5B model, so the short line format (~2 s) is the default. NATIVE_JSON = true switches back.
+const NATIVE_JSON = false;
+const nativeBody = (note, extra) => JSON.stringify(NATIVE_JSON
+  ? { messages: messagesJson(note), temperature: 0, max_tokens: 320, cache_prompt: true, response_format: { type: 'json_schema', json_schema: { name: 'route', schema: SCHEMA } }, ...extra }
+  : { messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
 
 // Fill the prompt cache in the background so the first real request is fast.
 export async function warmNative() {
@@ -385,12 +386,12 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   try {
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
     stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
-    const g = ground(backend === 'native' ? parseJson(stats.out, note) : parseLines(stats.out, note), rules);
+    const g = ground(backend === 'native' && NATIVE_JSON ? parseJson(stats.out, note) : parseLines(stats.out, note), rules);
     Object.assign(g, { lang: rules.lang, parser: 'llm' });
     const agree = agrees(g, rules);
-    // Structured, checked AI route first (it reads free-form and translated speech far better);
-    // the rule route is kept as the instant fallback and for the "use other" switch.
-    return { graph: g, llmGraph: g, stats, rules, agree };
+    // Rules are exact and instant on the patterns they know (measured: they beat the 1.5B model on the test
+    // routes); the AI route is used only when the rules cannot read the whole route.
+    return { graph: complete(rules) ? rules : g, llmGraph: g, stats, rules, agree };
   } catch (e) {
     console.warn('LLM parse failed, using rules', e);
     return { graph: rules, stats, fallback: e.message }; // stats kept so the raw output can be inspected
