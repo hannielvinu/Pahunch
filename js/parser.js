@@ -24,7 +24,10 @@ const GROUND = set('ground neeche');
 // Relations. Prepositions take the target before them ("gate opposite MedPlus");
 // postpositions take it after ("MedPlus ke saamne gate").
 const REL_PRE = { opposite: 'opposite', facing: 'opposite', front: 'opposite', next: 'next_to', beside: 'next_to', besides: 'next_to', near: 'near', behind: 'behind' };
-const REL_POST = { saamne: 'opposite', samne: 'opposite', saamane: 'opposite', samane: 'opposite', सामने: 'opposite', edurige: 'opposite', eduru: 'opposite', ಎದುರು: 'opposite', ಎದುರಿಗೆ: 'opposite', ethire: 'opposite', ethirey: 'opposite', ethir: 'opposite', எதிரே: 'opposite', எதிர்: 'opposite', bagal: 'next_to', baazu: 'next_to', paas: 'near', पास: 'near', बगल: 'next_to', pakka: 'next_to', pakkada: 'next_to', ಪಕ್ಕ: 'next_to', pakkathula: 'next_to', pakkam: 'next_to', பக்கத்தில்: 'next_to', peeche: 'behind', hinde: 'behind', pinnadi: 'behind' };
+const REL_POST = {
+  // spellings speech engines produce: samni, saamney, edhire, pakathula, kitta…
+  samni: 'opposite', saamni: 'opposite', samney: 'opposite', saamney: 'opposite', samnay: 'opposite', saamnay: 'opposite', samaney: 'opposite', samnae: 'opposite', edhire: 'opposite', edhir: 'opposite', ethirla: 'opposite', edhirla: 'opposite', munnadi: 'opposite', mundhe: 'opposite', munde: 'opposite',
+  pakathula: 'next_to', pakkathile: 'next_to', pakathile: 'next_to', pakkatula: 'next_to', pakkathla: 'next_to', pakathla: 'next_to', bajju: 'next_to', bazu: 'next_to', kitta: 'near', kitte: 'near', kittae: 'near', nazdeek: 'near', hattira: 'near', hathira: 'near', adutha: 'next_to', saamne: 'opposite', samne: 'opposite', saamane: 'opposite', samane: 'opposite', सामने: 'opposite', edurige: 'opposite', eduru: 'opposite', ಎದುರು: 'opposite', ಎದುರಿಗೆ: 'opposite', ethire: 'opposite', ethirey: 'opposite', ethir: 'opposite', எதிரே: 'opposite', எதிர்: 'opposite', bagal: 'next_to', baazu: 'next_to', paas: 'near', पास: 'near', बगल: 'next_to', pakka: 'next_to', pakkada: 'next_to', ಪಕ್ಕ: 'next_to', pakkathula: 'next_to', pakkam: 'next_to', பக்கத்தில்: 'next_to', peeche: 'behind', hinde: 'behind', pinnadi: 'behind' };
 
 const COLOUR = {
   blue: 'blue neela neeli neele neel nila neelam neeli', red: 'red laal lal kempu sivappu sigappu', green: 'green hara hari hare hasiru pachai pacha',
@@ -53,7 +56,7 @@ export const LANDMARKS = {
   apartment: ['apartment apartments flats residency enclave society building', 'APARTMENT APARTMENTS RESIDENCY ENCLAVE'],
   gate: ['gate darwaza darwaja gaate gatey', ''],
   door: ['door', ''],
-  house: ['house ghar mane veedu', ''],
+  house: ['house ghar mane veedu veetu veetuku veettukku veetukku veettu manege', ''],
   // Generic signage, useful indoors (venue, malls, offices).
   sign: ['sign board signboard banner poster text written likha', ''],
   desk: ['desk counter booth stall', ''],
@@ -110,7 +113,7 @@ const VERBS = set(`walk walking go going come coming take turn turning see look 
   is are was its thats there will you your our we us they then before until till up down inside outside towards toward into onto
   ok okay so get got stand standing wait waiting stop stopped near nearby beside front back side way spot place point location
   hello hey please thanks thank bro sir madam bhaiya anna boss dear just also very big small new old first last
-  cut pannu panni pannunga po poi ponga poitu vaa vaanga edu edunga ah dhaan than romba konjam
+  cut pannu panni pannunga po poi ponga poitu vaa vaanga edu edunga ah dhaan than romba konjam andha indha antha intha adhu idhu color colour coloured colored rang nillunga nillu nillunge nil iruken irukken irukom
   lo le lena lijiye khade khada khadi milenge milega hoon hun aao aaiye aana jao jaiye jana chalo chaliye mudo mudiye mud ruko dekho hai hain ho hoga raha rahe wahan yahan udhar idhar aur bas
   banni baa hogi hogu nodi tirugi thirugi illi ide alli vaanga vanga ponga poi thirumbu thirumbunga paarunga irukku iruku inge ange`);
 
@@ -135,7 +138,7 @@ function nameBefore(toks, i) {
   for (let j = i - 1; j >= 0 && name.length < 3; j--) {
     const { raw, w } = toks[j];
     if (HONORIFIC.has(w)) continue;
-    if (STOP.has(w) || isLexical(w) || !/^[\p{L}\d&]+$/u.test(raw)) break;
+    if (STOP.has(w) || VERBS.has(w) || isLexical(w) || !/^[\p{L}\d&]+$/u.test(raw)) break;
     name.unshift(raw);
   }
   return name.join(' ') || null;
@@ -164,6 +167,7 @@ function findLandmarks(toks) {
       }
       if (prev && prev.end === i - 1 && !prev.name && prev.type !== type && !(toks[i - 1].w in BRANDS)) {
         // "Exit gate", "temple gate": one place, named by the first word.
+        if (['house', 'door', 'apartment'].includes(type)) { prev.end = i; continue; } // "gate veedu": the gate is what the camera sees
         prev.name = toks[prev.i].raw;
         prev.type = type;
         prev.end = i;
@@ -211,6 +215,19 @@ function findLandmarks(toks) {
 
 const landmarkOut = (lm) => ({ type: lm.type, name: lm.name, colour: lm.colour });
 
+// Equal, or exactly one letter changed / inserted / dropped.
+function oneOff(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 function analyse(clause) {
   const toks = tokens(clause);
   const at = (pred) => toks.findIndex((t) => pred(t.w));
@@ -236,6 +253,13 @@ function analyse(clause) {
     const w = toks[i].w;
     if (w in REL_PRE) { r.rel = { relation: REL_PRE[w], at: i, post: false }; break; }
     if (w in REL_POST) { r.rel = { relation: REL_POST[w], at: i, post: true }; break; }
+    // one letter off a known relation word ("saamnee", "samnee")
+    const near = w.length >= 5 && !(w in TYPE_OF) && Object.keys(REL_POST).find((k) => k.length >= 5 && /^[a-z]+$/.test(k) && oneOff(w, k));
+    if (near) {
+      r.rel = { relation: REL_POST[near], at: i, post: true };
+      r.landmarks = r.landmarks.filter((lm) => !(lm.type === 'other' && lm.i === i && lm.end === i)); // it was the relation, not a place
+      break;
+    }
   }
   // "2nd cross" is a road, not a landmark called "2nd".
   r.landmarks = r.landmarks.filter((lm) => !(lm.type === 'gate' && r.turn && !r.rel));
