@@ -40,7 +40,8 @@ export class Overlay {
   }
 
   // Object detections from detector.js: [{ label, score, x, y, w, h }] (fractions of the frame).
-  setDetections(dets) { this.dets = dets || []; this.detsAt = performance.now(); }
+  // hit: { label, text } when one class is the current step's landmark (drawn green).
+  setDetections(dets, hit) { this.dets = dets || []; this.detHit = hit || null; this.detsAt = performance.now(); }
 
   // Pixel mask of the target colour (ImageData, alpha = hit), drawn tinted over the video.
   setMask(mask, name) {
@@ -138,16 +139,18 @@ export class Overlay {
     ctx.lineWidth = 3;
     for (const d of this.dets) {
       const r = toScreen(d, m), c = Math.min(22, r.w / 4, r.h / 4);
-      ctx.strokeStyle = CYAN;
-      ctx.shadowColor = CYAN; ctx.shadowBlur = 8;
+      const isHit = this.detHit && d.label === this.detHit.label, col = isHit ? GREEN : CYAN;
+      ctx.lineWidth = isHit ? 5 : 3;
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col; ctx.shadowBlur = isHit ? 16 : 8;
       ctx.beginPath();
       for (const [x, y, dx, dy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
         ctx.moveTo(x + dx * c, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * c);
       }
       ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.08; ctx.fillStyle = CYAN; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.globalAlpha = 1;
-      label(ctx, `${d.label} ${Math.round(d.score * 100)}%`, r.x, r.y - 4, CYAN, '#012', 'bold 13px Inter, system-ui, sans-serif');
+      ctx.globalAlpha = isHit ? 0.16 : 0.08; ctx.fillStyle = col; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.globalAlpha = 1;
+      label(ctx, isHit ? `${this.detHit.text} · ${Math.round(d.score * 100)}%` : `${d.label} ${Math.round(d.score * 100)}%`, r.x, r.y - 4, col, '#012', 'bold 13px Inter, system-ui, sans-serif');
     }
     ctx.restore();
   }

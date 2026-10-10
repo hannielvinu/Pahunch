@@ -99,6 +99,26 @@ function detectLang(text) {
   return best;
 }
 
+// Words that are never part of a landmark's name: verbs and fillers in the four languages.
+const VERBS = set(`walk walking go going come coming take turn turning see look find reach reached keep move pass cross head enter
+  is are was its thats there will you your our we us they then before until till up down inside outside towards toward into onto
+  ok okay so get got stand standing wait waiting stop stopped near nearby beside front back side way spot place point location
+  hello hey please thanks thank bro sir madam bhaiya anna boss dear just also very big small new old first last
+  lo le lena lijiye khade khada khadi milenge milega hoon hun aao aaiye aana jao jaiye jana chalo chaliye mudo mudiye mud ruko dekho hai hain ho hoga raha rahe wahan yahan udhar idhar aur bas
+  banni baa hogi hogu nodi tirugi thirugi illi ide alli vaanga vanga ponga poi thirumbu thirumbunga paarunga irukku iruku inge ange`);
+
+// Everyday objects the on-device vision model (COCO classes) can see, by the words people use for them.
+export const OBJECTS = {
+  person: 'person', people: 'person', man: 'person', woman: 'person', guard: 'person', security: 'person', volunteer: 'person',
+  car: 'car', cab: 'car', taxi: 'car', bike: 'motorcycle', scooter: 'motorcycle', motorcycle: 'motorcycle', bicycle: 'bicycle', cycle: 'bicycle',
+  bus: 'bus', truck: 'truck', chair: 'chair', chairs: 'chair', sofa: 'couch', couch: 'couch', table: 'dining table', tables: 'dining table',
+  plant: 'potted plant', plants: 'potted plant', pot: 'potted plant', tv: 'tv', television: 'tv', screen: 'tv', monitor: 'tv', display: 'tv',
+  laptop: 'laptop', laptops: 'laptop', computer: 'laptop', pc: 'laptop', keyboard: 'keyboard', mouse: 'mouse', phone: 'cell phone', mobile: 'cell phone',
+  bottle: 'bottle', bottles: 'bottle', cup: 'cup', mug: 'cup', clock: 'clock', book: 'book', books: 'book', bag: 'backpack', backpack: 'backpack',
+  umbrella: 'umbrella', bench: 'bench', fridge: 'refrigerator', refrigerator: 'refrigerator', microwave: 'microwave', oven: 'oven', sink: 'sink',
+  toilet: 'toilet', bed: 'bed', vase: 'vase', dog: 'dog', cat: 'cat', signal: 'traffic light', hydrant: 'fire hydrant',
+};
+
 const isLexical = (w) => LEFT.has(w) || RIGHT.has(w) || STRAIGHT.has(w) || PASS.has(w) || w in ROAD || FLOOR.has(w) ||
   w in COLOUR_OF || w in TYPE_OF || w in REL_PRE || w in REL_POST || Object.values(ORD).some((s) => s.has(w));
 
@@ -135,6 +155,13 @@ function findLandmarks(toks) {
         prev.name ??= toks[i - 1].raw;
         continue;
       }
+      if (prev && prev.end === i - 1 && !prev.name && prev.type !== type && !(toks[i - 1].w in BRANDS)) {
+        // "Exit gate", "temple gate": one place, named by the first word.
+        prev.name = toks[prev.i].raw;
+        prev.type = type;
+        prev.end = i;
+        continue;
+      }
       found.push({ i: found.length && TYPE_OF[toks[i - 1]?.w] === type ? found.pop().i : i, end: i, type, name: null });
     }
   }
@@ -144,8 +171,28 @@ function findLandmarks(toks) {
     const between = toks.slice(a.end + 1, b.i).map((t) => t.w);
     if (between.length && between.every((w) => WALA.has(w))) { a.end = b.end; found.splice(k, 1); }
   }
+  for (const lm of found) if (!lm.name) lm.name = nameBefore(toks, lm.i);
+  // Anything else that looks like a noun phrase is a landmark too ("the coffee machine", "Remote PC", "black chair"):
+  // the camera checks it by reading its name or by seeing the object.
+  const used = new Set();
   for (const lm of found) {
-    if (!lm.name) lm.name = nameBefore(toks, lm.i);
+    for (let j = lm.i; j <= lm.end; j++) used.add(j);
+    const nameWords = new Set((lm.name || '').toLowerCase().split(/\s+/));
+    for (let j = lm.i - 1; j >= Math.max(0, lm.i - 4); j--) if (nameWords.has(toks[j].w) || HONORIFIC.has(toks[j].w)) used.add(j);
+  }
+  const hint = (w) => Object.values(LANG_HINTS).some((s) => s.has(w));
+  const content = (j) => !used.has(j) && /^\p{L}{3,}$/u.test(toks[j].raw) && !STOP.has(toks[j].w) && !isLexical(toks[j].w) &&
+    !VERBS.has(toks[j].w) && !HONORIFIC.has(toks[j].w) && !WALA.has(toks[j].w) && !hint(toks[j].w);
+  for (let j = 0; j < toks.length; j++) {
+    if (!content(j)) continue;
+    let e = j;
+    while (e + 1 < toks.length && content(e + 1)) e++;
+    const s = Math.max(j, e - 2); // at most three words
+    found.push({ i: s, end: e, type: 'other', name: toks.slice(s, e + 1).map((x) => x.raw).join(' ') });
+    j = e;
+  }
+  found.sort((a, b) => a.i - b.i);
+  for (const lm of found) {
     for (let j = lm.i - 1; j >= Math.max(0, lm.i - 4); j--) {
       if (toks[j].w in COLOUR_OF) { lm.colour = COLOUR_OF[toks[j].w]; break; }
       if (found.some((o) => o !== lm && o.end === j)) break;
@@ -195,13 +242,15 @@ export function mentionsRelation(note) {
 
 export function verifyFor(step) {
   const lm = step.landmark;
-  if (step.kind === 'turn') return { signs: [], alt: [], colour: null, compass: step.turn, confidence: 'medium' };
+  if (step.kind === 'turn') return { signs: [], alt: [], colour: null, objects: [], compass: step.turn, confidence: 'medium' };
   const target = lm?.name ? lm : step.ref?.landmark?.name ? step.ref.landmark : lm;
   const signs = target?.name ? W(target.name.toUpperCase().replace(/[^\p{L}\d ]/gu, ' ')).filter((w) => w.length >= 3) : [];
   const alt = target ? W(LANDMARKS[target.type]?.[1] || '') : [];
   const colour = lm?.colour || null;
-  const confidence = signs.length ? 'high' : alt.length || colour ? 'medium' : 'low';
-  return { signs, alt, colour, compass: null, confidence };
+  const words = [...W((lm?.name || '').toLowerCase()), lm?.type === 'desk' ? 'table' : ''];
+  const objects = [...new Set(words.map((w) => OBJECTS[w]).filter(Boolean))];
+  const confidence = signs.length || objects.length ? 'high' : alt.length || colour ? 'medium' : 'low';
+  return { signs, alt, colour, objects, compass: null, confidence };
 }
 
 export function parseRules(input) {
@@ -217,7 +266,8 @@ export function parseRules(input) {
     if (a.turn) {
       // "Ganesh mandir ke baad doosri gali mein baayen" -> pass the temple, then turn.
       const turnAt = a.toks.findIndex((t) => LEFT.has(t.w) || RIGHT.has(t.w));
-      const before = lms.filter((lm) => lm.i < turnAt || (a.passAt >= 0 && a.passAt > turnAt && lm.i < a.passAt));
+      const atWord = (lm) => ['at', 'near', 'from', 'after', 'by', 'beside'].includes(a.toks[lm.i - 1]?.w) || ['at', 'near', 'by'].includes(a.toks[lm.i - 2]?.w);
+      const before = lms.filter((lm) => lm.i < turnAt || atWord(lm) || (a.passAt >= 0 && a.passAt > turnAt && lm.i < a.passAt));
       for (const lm of before) push({ kind: 'pass', landmark: landmarkOut(lm) });
       push({ kind: 'turn', turn: a.turn, ordinal: a.ordinal || 1, road: a.road });
       // "turn right, see the Remote PC text": landmarks after the turn come after it.
@@ -263,7 +313,7 @@ export const SAMPLES = {
 
 // Human-readable line for a step (plan screen, captions).
 export function describe(step) {
-  const lm = (l) => (l ? [l.colour, l.name, l.type === 'sign' || l.type === 'desk' ? l.type : l.name ? l.type : l.type].filter(Boolean).join(' ') : 'destination');
+  const lm = (l) => (l ? [l.colour, l.name, l.type === 'other' ? '' : l.type.replace('_', ' ')].filter(Boolean).join(' ') : 'destination');
   const ord = ['', '1st', '2nd', '3rd', '4th'][step.ordinal] || `${step.ordinal}th`;
   if (step.kind === 'turn') return `Take the ${ord} ${step.road || 'turn'} ${step.turn}`;
   if (step.kind === 'pass') return `Pass ${lm(step.landmark)}`;

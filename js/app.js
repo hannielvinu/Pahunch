@@ -120,7 +120,7 @@ function renderPlan() {
     ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
     : st && !p.fallback
       ? `Route by rule parser (instant), cross-checked on this phone by ${ai} · language: ${g.lang}`
-      : `Parsed by: rule parser · ${g.ms} ms · language: ${g.lang}${p.fallback ? ` · on-device model not used: ${p.fallback}` : ''}`;
+      : `Route read by the rule parser in ${g.ms} ms · language: ${g.lang}${p.fallback && p.fallback !== "no on-device model running" ? " · AI cross-check skipped (unclear answer)" : ""}`;
   $('#raw').hidden = !st;
   if (st) $('#raw-out').textContent = `Note: ${g.note}\n\n${st.out || '(empty)'}\n\n${st.tokensIn ?? '?'} prompt tokens (${st.cached ?? 0} from cache) · ${st.tokensOut ?? '?'} generated · ${(st.ms / 1000).toFixed(1)} s`;
   const showAgree = !!(p.rules && st);
@@ -292,13 +292,30 @@ function tick() {
   state.raf = setTimeout(tick, 150);
 }
 
+// The step's landmark is an everyday object ("the black chair", "laptop table"): the vision model can confirm it.
+// Needs the same object in 2 frames within a second, so one flicker doesn't move the route on.
+function onDetections(dets) {
+  const s = step();
+  const want = s?.kind !== 'turn' ? s?.verify.objects || [] : [];
+  const hit = want.length ? dets.find((d) => want.includes(d.label) && d.score >= 0.5) : null;
+  if (!hit) { state.objHits = 0; return null; }
+  const now = performance.now();
+  state.objHits = now - (state.objAt || 0) < 1000 ? (state.objHits || 0) + 1 : 1;
+  state.objAt = now;
+  const label = `✓ ${hit.label} · step ${s.n}`;
+  if (state.objHits < 2 || state.asking) return { label: hit.label, text: label };
+  if (s.kind === 'pass') confirmStep(T().spotted(spokenName(s.landmark)));
+  else { state.signSeenAt = now; state.signHit = s.verify.signs.length ? 'type' : 'name'; decideArrive(); }
+  return { label: hit.label, text: label };
+}
+
 // Object detection on the live camera (MediaPipe), throttled so OCR keeps its share of the phone.
 function detectLoop() {
   if (!state.running) return;
   const t0 = performance.now();
   try {
     const dets = detector.detect();
-    overlay.setDetections(dets);
+    overlay.setDetections(dets, onDetections(dets));
     if (detector.ready) $('#det-ms').textContent = `vision ${detector.ms} ms · ${detector.delegate}`;
   } catch (e) { console.warn(e); }
   state.detTimer = setTimeout(detectLoop, Math.max(60, 140 - (performance.now() - t0)));
