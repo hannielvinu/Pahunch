@@ -11,6 +11,28 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/theme.css">
+  <script>
+    // Startup watchdog (plain script, runs even if the app's modules fail to load): if the app hasn't started in
+    // 12 s, the splash says why and offers a clean reload that drops any stale offline copy.
+    window.__bootErrors = [];
+    addEventListener('error', function (e) { var t = e.target; __bootErrors.push(e.message || (t && (t.src || t.href)) || 'load error'); }, true);
+    addEventListener('unhandledrejection', function (e) { __bootErrors.push(String((e.reason && e.reason.message) || e.reason)); });
+    setTimeout(function () {
+      if (window.__booted) return;
+      var box = document.createElement('div');
+      box.className = 'boot-fail';
+      box.innerHTML = '<p><b>Pahunch is taking too long to start.</b></p><p class="meta"></p><button class="btn primary big">Reload cleanly</button>';
+      box.querySelector('.meta').textContent = __bootErrors.length ? 'Reason: ' + __bootErrors.slice(-2).join(' · ') : 'Is the engine running? In Termux: bash tools/start.sh --bg';
+      box.querySelector('button').onclick = function () {
+        var done = function () { location.replace(location.pathname + '?r=' + Date.now() + location.hash); };
+        Promise.all([
+          navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); }) : 0,
+          window.caches ? caches.keys().then(function (k) { return Promise.all(k.map(function (n) { return caches.delete(n); })); }) : 0,
+        ]).then(done, done);
+      };
+      document.getElementById('splash').appendChild(box);
+    }, 12000);
+  </script>
   <script src="lib/tesseract/tesseract.min.js" defer></script>
   <script src="lib/qrcode/qrcode.js" defer></script>
   <script src="js/app.js" type="module"></script>

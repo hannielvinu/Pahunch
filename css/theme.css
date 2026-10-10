@@ -273,3 +273,6 @@ body:not(.dev) .dev-only { display: none !important; }
 /* Live mic level from Android's recogniser */
 .vsheet .waves { transform: scaleY(calc(0.6 + var(--lvl, 0.4))); transition: transform .09s; }
 .partner-link { display: block; text-align: center; margin-top: 4px; color: var(--dim); font-size: 13.5px; text-decoration: none; }
+/* Startup watchdog message on the splash */
+.boot-fail { margin-top: 18px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
+.boot-fail p { margin: 0; }

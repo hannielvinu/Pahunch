@@ -1042,6 +1042,7 @@ async function boot() {
     show(saved ? 'home' : 'roles');
   }
   showVoicePacks();
+  window.__booted = true;
   $('#splash').classList.add('out');
   setTimeout(() => ($('#splash').hidden = true), 450);
 }
