@@ -616,16 +616,47 @@ $('#handsfree').onclick = () => {
   const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
   if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }
   if (!voiceAvailable) return toast('Voice commands need Chrome speech recognition.');
+  if (!navigator.onLine) return toast('Offline: hands-free needs Chrome speech (network). Tap Yes / Not yet instead.');
   listener.start(state.lang);
   $('#handsfree').setAttribute('aria-pressed', 'true');
   toast('Listening: say "yes", "haan", "skip" or "repeat".');
 };
 
+// ---------- Keyboard voice (Gboard) ----------
+// The phone keyboard's own mic (Gboard voice typing) recognises speech on the phone, also in airplane mode once
+// its offline speech languages are downloaded. We focus the note (must happen inside the tap, or Android won't
+// raise the keyboard); the rider taps the keyboard mic and the words stream into the note.
+const keyboardVoice = () => speechEngine === 'keyboard' || (speechEngine === 'auto' && !navigator.onLine);
+let kbd = null; // { t0 } while keyboard dictation is open
+function kbdOpen() {
+  const note = $('#note');
+  kbd = { t0: performance.now() };
+  $('#mic').classList.add('live');
+  $('#mic-status').hidden = true;
+  $('#kbd-hint').hidden = false;
+  note.focus();
+  note.select(); // new dictation replaces the old note; tap inside to add to it instead
+  setTimeout(() => $('#kbd-hint').scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 450);
+}
+function kbdClose() {
+  if (!kbd) return;
+  const heard = $('#note').value.trim();
+  if (heard) state.lastVoice = { at: new Date().toLocaleTimeString(), chip: 'keyboard', heard, english: '', ms: Math.round(performance.now() - kbd.t0) };
+  kbd = null;
+  $('#mic').classList.remove('live');
+  $('#kbd-hint').hidden = true;
+  $('#note').blur();
+}
+$('#kbd-plan').onclick = () => { kbdClose(); $('#parse').click(); };
+$('#parse').addEventListener('click', kbdClose, { capture: true });
+
 // ---------- Dictate directions ----------
 $('#mic').onclick = async () => {
   unlockSpeech();
   const btn = $('#mic'), status = $('#mic-status');
+  if (kbd) return kbdClose();
   if (btn.classList.contains('live')) { micStop?.(); return; }
+  if (keyboardVoice()) return kbdOpen();
   btn.classList.add('live');
   const sheet = $('#vsheet');
   sheet.hidden = false;
@@ -677,8 +708,8 @@ $('#mic').onclick = async () => {
         if (heard !== r.text) { status.hidden = false; status.textContent = `English: "${r.text}"`; }
       }
     }
-    if (!heard) { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
-  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type the directions instead.`; }
+    if (!heard) { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again, or tap the box and use the mic on your keyboard.'; }
+  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Tap the box and use the mic on your keyboard instead.`; }
   sheet.hidden = true;
   btn.classList.remove('live');
 };
@@ -713,8 +744,18 @@ $('#vlog-copy').onclick = async () => {
   catch { $('#sensors').textContent = txt; toast('Clipboard blocked: the log is shown in the panel; select and copy it.'); }
 };
 
-const engineLabel = () => ($('#engine-toggle').textContent = speechEngine === 'whisper' ? 'Speech: Whisper only (offline)' : 'Speech: phone engine (Whisper fallback)');
-$('#engine-toggle').onclick = () => { speechEngine = speechEngine === 'whisper' ? 'auto' : 'whisper'; try { localStorage.setItem('pahunch.speechEngine', speechEngine); } catch {} engineLabel(); };
+const ENGINE_LABELS = {
+  auto: 'Speech: auto (online: phone engine · offline: keyboard mic)',
+  keyboard: 'Speech: keyboard mic always (Gboard, on-device)',
+  whisper: 'Speech: Whisper only (offline)',
+};
+const engineLabel = () => ($('#engine-toggle').textContent = ENGINE_LABELS[speechEngine] || ENGINE_LABELS.auto);
+$('#engine-toggle').onclick = () => {
+  const order = Object.keys(ENGINE_LABELS);
+  speechEngine = order[(order.indexOf(speechEngine) + 1) % order.length];
+  try { localStorage.setItem('pahunch.speechEngine', speechEngine); } catch {}
+  engineLabel();
+};
 setTimeout(engineLabel, 0);
 
 // ---------- Field test: with vs without Pahunch ----------
@@ -748,7 +789,7 @@ $('#trials').addEventListener('toggle', renderTrials);
 const CONFIRM_Q = { en: 'Right?', hi: 'ठीक है?', ta: 'சரியா?', kn: 'ಸರಿನಾ?', ml: 'ശരിയാണോ?' };
 const VOICE_OF = { tanglish: 'ta', hinglish: 'hi', auto: 'en' };
 let build = null;
-const buildLang = () => VOICE_OF[speechLang] || speechLang || 'en';
+const buildLang = () => (speechLang === 'auto' && build?.lang) || VOICE_OF[speechLang] || speechLang || 'en';
 function stepWords(st, lang) {
   const T2 = text(lang);
   if (st.kind === 'turn') return T2.turn(st.ordinal, T2[st.turn]);
@@ -764,12 +805,33 @@ $('#stepmode').onclick = () => {
   unlockSpeech();
   build = { steps: [], pending: null };
   $('#s-heard').textContent = '';
+  $('#s-type').hidden = true;
+  $('#s-mic').textContent = 'Speak';
   $('#ssheet').hidden = false;
   renderBuild();
 };
-$('#s-cancel').onclick = () => { micStop?.(); $('#ssheet').hidden = true; build = null; };
+$('#s-cancel').onclick = () => { micStop?.(); $('#s-type').blur(); $('#ssheet').hidden = true; build = null; };
+// Keyboard voice in step mode: the field takes the dictated phrase; "Use this" (or the keyboard's Done) reads it back.
+function stepFromKeyboard() {
+  const f = $('#s-type'), heard = f.value.trim();
+  if (!heard) { f.focus(); return toast('Tap the mic on your keyboard and say this step.'); }
+  f.value = '';
+  f.blur();
+  takeStep(heard);
+}
+$('#s-type').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); stepFromKeyboard(); } });
 $('#s-mic').onclick = async () => {
   const btn = $('#s-mic');
+  if (keyboardVoice()) {
+    const f = $('#s-type');
+    if (!f.hidden && f.value.trim()) return stepFromKeyboard();
+    f.hidden = false;
+    btn.textContent = 'Use this';
+    build.pending = null; renderBuild();
+    $('#s-heard').textContent = 'Tap the mic on your keyboard and say this step.';
+    f.focus();
+    return;
+  }
   if (btn.classList.contains('live')) return micStop?.();
   btn.classList.add('live'); btn.textContent = 'Listening… tap to stop';
   build.pending = null; renderBuild();
@@ -793,9 +855,14 @@ $('#s-mic').onclick = async () => {
     }
   } catch (e) { toast(`Voice: ${e.message}`); }
   btn.classList.remove('live'); btn.textContent = 'Speak';
-  $('#s-heard').textContent = heard ? `"${heard}"` : 'Didn’t catch that. Tap Speak and try again.';
-  if (!heard) return;
-  let steps = parseRules(heard).steps.filter((s) => s.kind === 'turn' || s.landmark);
+  if (!heard) { $('#s-heard').textContent = 'Didn’t catch that. Tap Speak and try again.'; return; }
+  takeStep(heard);
+};
+function takeStep(heard) {
+  $('#s-heard').textContent = `"${heard}"`;
+  const parsed = parseRules(heard);
+  if (speechLang === 'auto' && parsed.lang && parsed.lang !== 'en') build.lang = parsed.lang; // keyboard voice: reply in the language spoken
+  let steps = parsed.steps.filter((s) => s.kind === 'turn' || s.landmark);
   if (!steps.length && build.alt) steps = parseRules(build.alt).steps.filter((s) => s.kind === 'turn' || s.landmark);
   build.alt = null;
   if (!steps.length) { toast('No landmark or turn in that. Try "second left" or "Ganesh mandir".'); return; }
@@ -856,7 +923,7 @@ async function boot() {
   const jobs = LITE ? ['camera', 'ocr', 'llm', 'sensors'].map((k) => Promise.resolve(mark(k, true, 'preview'))) : [
     Promise.all([detector.load(), scene.load().catch(() => null)]).then(() => mark('camera', true, `objects + places · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
     new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · 4 languages'), () => mark('ocr', false, 'failed')),
-    warmNative().then((up) => mark('llm', up, up ? 'Qwen2.5 · llama.cpp' : 'rules only (start.sh)')),
+    warmNative().then((name) => mark('llm', !!name, name ? `${name} · llama.cpp` : 'rules only (start.sh)')),
     new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
   ];
   await Promise.race([Promise.allSettled(jobs), new Promise((r) => setTimeout(r, 9000))]);

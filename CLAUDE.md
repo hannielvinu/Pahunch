@@ -24,9 +24,11 @@ Phase 1 prototype: never copy from it).
 
 ## Pipeline
 - **Voice**: online → Chrome Web Speech (Google's engine, per-language locale from the chips; Tanglish→ta-IN,
-  Hinglish→hi-IN). Offline → (1) Android's own recogniser via `tools/stt-bridge.py` (Termux:API `termux-speech-to-text`,
-  SSE on :8084, client `js/androidstt.js`), (2) Chrome on-device recognition if supported (`processLocally`),
-  (3) Whisper (`js/stt.js`, whisper.cpp). Chrome's web speech needs the network on Android, so offline needs (1) or (3).
+  Hinglish→hi-IN). **Offline (airplane mode) → keyboard voice**: the mic focuses the note and the rider taps the mic
+  on Gboard; Gboard's own on-device speech recognition types the words in (needs Gboard as keyboard + its offline
+  speech languages downloaded). Step-by-step mode does the same with a small field. Engine toggle (Live sensors):
+  auto / keyboard always / Whisper only. Still in code but not on the default path: Termux:API bridge
+  (tools/stt-bridge.py, js/androidstt.js; returned "no match" on this phone) and Whisper (js/stt.js).
 - **Understanding**: `js/native.js` maps native-script route words (incl. transliterated English) to the parser's
   vocabulary. `js/parser.js` rule engine (exact, instant). `js/llm.js` **rewriter**: Gemma 3n rewrites any language/mix
   into ONE plain English route line ("go past the X, take the second left, then the Y opposite the Z, second floor"),
@@ -41,8 +43,7 @@ Phase 1 prototype: never copy from it).
 - Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs`
 - Voice: `node tools/eval-voice.mjs` scores recordings in tests/voice/ (needs whisper-server + ffmpeg).
 
-## Open problem (Sat 16:45): offline voice through the app's own mic
-Airplane mode: Chrome web speech fails (needs network); Whisper accuracy is poor for Indian speech. Bridge built
-(stt-bridge.py). Termux:API + `pkg install termux-api` installed; `termux-speech-to-text` in airplane mode returns
-**"error no match"**. Likely causes (Android settings Hanniel must tap): default voice input service is vivo's, not
-Google's; Google voice language ≠ downloaded offline pack (e.g. English US vs English India); offline pack not downloaded.
+## Offline voice (Sat 17:45)
+Keyboard voice (Gboard mic, on-device) built from the laptop; confirm on the phone in airplane mode. Phone setup: Gboard default keyboard; Gboard settings → Voice
+typing → on, Offline speech recognition / Faster voice typing → download English (India), Tamil, Hindi (and Kannada,
+Malayalam if offered). Gboard is Google's recogniser, not ours: say so if asked.

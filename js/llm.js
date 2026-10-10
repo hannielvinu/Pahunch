@@ -319,10 +319,22 @@ const nativeBody = (note, extra) => JSON.stringify(NATIVE_REWRITE
   : { messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
 
 // Fill the prompt cache in the background so the first real request is fast.
+// Returns a short name of the model llama-server has loaded ("Gemma 3n E2B"), or false when it isn't running.
 export async function warmNative() {
   if (!(await nativeUp())) return false;
   fetch(`${NATIVE_URL}/v1/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: nativeBody('go straight', { max_tokens: 1 }) }).catch(() => {});
-  return true;
+  try {
+    const r = await fetch(`${NATIVE_URL}/v1/models`, { signal: AbortSignal.timeout(1500) });
+    return modelName((await r.json()).data?.[0]?.id);
+  } catch { return 'on-device LLM'; }
+}
+export function modelName(id = '') {
+  const f = id.split(/[\\/]/).pop().toLowerCase();
+  if (f.includes('gemma-3n')) return 'Gemma 3n E2B';
+  if (f.includes('qwen3-4b')) return 'Qwen3-4B';
+  if (f.includes('qwen3-1.7b')) return 'Qwen3-1.7B';
+  if (f.includes('qwen2.5')) return 'Qwen2.5-1.5B';
+  return 'on-device LLM';
 }
 
 async function runNative(note, onToken) {

@@ -79,6 +79,11 @@
       <textarea id="note" rows="5" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
       <button id="mic" class="mic" aria-label="Speak directions"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></button>
     </div>
+    <div id="kbd-hint" class="kbd-hint" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>
+      <span><strong>Tap the mic on your keyboard</strong> and speak. Gboard recognises it on this phone, even in airplane mode.</span>
+      <button id="kbd-plan" class="btn primary">Plan</button>
+    </div>
     <p id="mic-status" class="meta" hidden></p>
     <button id="stepmode" class="link">Speak step by step</button>
     <div class="row" hidden>
@@ -232,6 +237,7 @@
       <ol id="s-list" class="card-route"></ol>
       <canvas id="s-wave" class="vwave" aria-hidden="true"></canvas>
       <p id="s-heard" class="vlive"></p>
+      <input id="s-type" class="etext" hidden placeholder="Tap the keyboard mic and speak this step" autocomplete="off" enterkeyhint="done">
       <p id="s-got" class="big-meta"></p>
       <div class="row erow">
         <button id="s-mic" class="btn primary">Speak</button>

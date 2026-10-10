@@ -250,3 +250,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 #s-mic.live { animation: live 1s ease-in-out infinite; }
 #s-list { align-self: stretch; text-align: left; }
 #parsed-by { white-space: pre-line; }
+/* Keyboard voice (Gboard mic): hint under the note while the keyboard is up */
+.kbd-hint { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; background: var(--soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 16px; font-size: 14px; line-height: 1.35; }
+.kbd-hint[hidden] { display: none; }
+.kbd-hint > .i { color: var(--accent); flex: none; }
+.kbd-hint span { flex: 1; }
+.kbd-hint .btn { min-height: 40px; padding: 8px 16px; flex: none; }
+#s-type { width: 100%; margin-top: 8px; }
