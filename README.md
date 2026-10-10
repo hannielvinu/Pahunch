@@ -17,7 +17,7 @@ Built from scratch by **Hanniel Vinu** during the iQOO Hackathon 2026 Grand Fina
 | Stage | How |
 |---|---|
 | **Hear** | Type or speak. Speech uses the phone's on-device speech recognition service (through Chrome's Web Speech API; Google's engine on Android, offline when the language pack is installed) with our own offline Whisper path (whisper.cpp in Termux) as automatic fallback, language picked or auto, including Tanglish / Hinglish modes. Native-script speech is understood directly; the English translation is kept as a backup. Step-by-step voice mode reads each step back for a yes. |
-| **Plan** | Rule engine for landmarks, turns (several per sentence), ordinals, colours, relations (opposite / next to / near) and floors in five languages and their code-mixed forms, plus native-script vocabulary. An on-device LLM (Qwen2.5-1.5B, llama.cpp) reads routes the rules cannot complete; its turns, floor and relations are checked against the customer's own words and landmark names must appear in what was said. Any step can be fixed with one tap. |
+| **Plan** | Rule engine for landmarks, turns (several per sentence), ordinals, colours, relations (opposite / next to / near) and floors in five languages and their code-mixed forms, plus native-script vocabulary. An on-device LLM (Gemma 3n E2B, llama.cpp) rewrites what was said, in any language or mix, into one plain English route line that the rules then parse (shown as "AI understood"); its turns, floor and relations are checked against the customer's own words and landmark names must appear in what was said. Any step can be fixed with one tap. |
 | **See** | Signboard OCR (Tesseract, enlarged centre of the view, fuzzy matching) - green box for the step's sign, red for decoys. Object detection (EfficientDet-Lite0) confirms everyday landmarks ("the black chair"). Appearance classifier (EfficientNet-Lite0) recognises temple-like buildings, gates, shop fronts, petrol pumps. Colour mask for "blue gate". Torch in the dark. |
 | **Move** | Turns from the fused orientation sensor (camera heading, correct when the phone is upright, not thrown by indoor magnetics); steps walked from the accelerometer; GPS area and DIGIPIN. |
 | **Guide** | Conversational voice in the rider's language ("ஆமா, கரெக்ட்! … இப்போ ரெண்டாவது தெருவுல லெஃப்ட் திரும்புங்க"), distinct vibration patterns, hands-free "yes / haan / skip". It asks instead of guessing when evidence is weak. |
@@ -35,6 +35,8 @@ Modes: delivery rider, ambulance / 108 (no questions, torch, emergency prompts),
 | Qwen3-4B Q4_0 (go/no-go) | 3/7 test routes, 5.4 s/route: no-go |
 | Qwen2.5-1.5B with JSON-schema output | 1/7, 8.3 s/route: reverted to the short line format |
 | Rule engine on the test routes | 7/7, under 5 ms |
+| **Gemma 3n E2B Q4_0 rewriter** (any language → one plain English line → rules), llama.cpp CPU, 6 threads | **6/7 messy multilingual test routes, 4.8 s/route** (the miss: it dropped the starting landmark; prompt fixed) |
+| Qwen3-1.7B Q4_0 rewriter | 4/7, 3.8 s/route |
 | Whisper (small q5_1 final pass, base for live transcript) | from ~1 min down to a few seconds after tuning (15 s audio window, 6 threads, flash attention, greedy) |
 
 Numbers not listed here have not been measured; treat any other figure as an assumption.
