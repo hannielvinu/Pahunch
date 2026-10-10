@@ -79,10 +79,15 @@ export function colourScan(imageData, colour) {
   const mask = new ImageData(width, height);
   const hits = [0, 0, 0], totals = [0, 0, 0];
   let light = 0;
+  // Grey-world white balance: warm venue lights / blue shade otherwise shift every hue.
+  let sr = 0, sg = 0, sb = 0;
+  for (let k = 0; k < data.length; k += 16) { sr += data[k]; sg += data[k + 1]; sb += data[k + 2]; }
+  const avg = (sr + sg + sb) / 3 || 1, gr = avg / (sr || 1), gg = avg / (sg || 1), gb = avg / (sb || 1);
+  const cap = (x) => (x > 255 ? 255 : x);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const k = (y * width + x) * 4, third = Math.min(2, Math.floor((x * 3) / width));
-      const [h, s, v] = hsv(data[k], data[k + 1], data[k + 2]);
+      const [h, s, v] = hsv(cap(data[k] * gr), cap(data[k + 1] * gg), cap(data[k + 2] * gb));
       light += v;
       totals[third]++;
       if (test && test(h, s, v)) { hits[third]++; mask.data[k + 3] = 255; }
