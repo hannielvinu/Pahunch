@@ -10,6 +10,7 @@ import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable, localSpeechSupported } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
+import { bridgeAvailable, bridgeListen } from './androidstt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -642,8 +643,16 @@ $('#mic').onclick = async () => {
   try {
     let heard = '';
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
+    // Offline: Android's own recogniser through the local bridge (works in airplane mode with offline packs).
+    if (!navigator.onLine && speechEngine !== 'whisper' && (await bridgeAvailable())) {
+      $('#vtitle').textContent = 'Listening · offline, on this phone';
+      const t0 = performance.now();
+      const rec = bridgeListen({ onPartial: (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; } });
+      micStop = rec.stop;
+      try { heard = await rec.done; if (heard) done(heard, '', Math.round(performance.now() - t0)); } catch {}
+    }
     const offlineLocal = !navigator.onLine && localSpeechSupported();
-    if (voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || offlineLocal)) {
+    if (!heard && voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || offlineLocal)) {
       $('#vtitle').textContent = offlineLocal ? 'Listening · offline, on this phone' : 'Listening…';
       micStop = () => dictate.stop?.();
       const t0 = performance.now();
@@ -766,7 +775,12 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
+    if (!navigator.onLine && speechEngine !== 'whisper' && (await bridgeAvailable())) {
+      const rec = bridgeListen({ onPartial: (p) => ($('#s-heard').textContent = p) });
+      micStop = rec.stop;
+      try { heard = await rec.done; } catch {}
+    }
+    if (!heard && voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
       micStop = () => dictate.stop?.();
       try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p)); } catch (e) { if (!(await sttAvailable())) throw e; }
     }

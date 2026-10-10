@@ -71,6 +71,15 @@ else
   echo "No offline speech yet: run 'bash tools/get-whisper.sh' once."
 fi
 
+# Android speech recogniser bridge (offline-capable voice through the app's own mic), needs Termux:API.
+pkill -f stt-bridge.py 2>/dev/null
+if command -v termux-speech-to-text >/dev/null; then
+  nohup python tools/stt-bridge.py > stt-bridge.log 2>&1 &
+  echo "Android speech bridge on port 8084"
+else
+  echo "No Android speech bridge: install the Termux:API app and run: pkg install termux-api"
+fi
+
 pkill -f "http.server 8080" 2>/dev/null
 if [ "${1:-}" = "--bg" ]; then
   # Background mode: everything keeps running after this script returns (stop with: bash tools/stop.sh)
