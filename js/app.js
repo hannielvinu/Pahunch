@@ -8,7 +8,7 @@ import { say, text, buzz, Compass, unlockSpeech } from './guide.js';
 import { Detector } from './detector.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable } from './voice.js';
-import { listen, sttAvailable } from './stt.js';
+import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -540,7 +540,7 @@ $('#mic').onclick = async () => {
       // Offline, on-device Whisper: real waveform, live transcript, any language -> English for the parser.
       sheet.classList.add('offline');
       $('#vtitle').textContent = 'Listening · on-device';
-      const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; }, onState: (m) => ($('#vtitle').textContent = m) });
+      const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; }, onState: (m) => ($('#vtitle').textContent = m), getLang: () => speechLang });
       micStop = rec.stop;
       const r = await rec.done;
       if (r.text) {
@@ -560,6 +560,17 @@ $('#mic').onclick = async () => {
 };
 
 let micStop = null;
+// Spoken language for offline voice: Auto, or pinned (much better for Hindi / Tamil / Kannada / Malayalam).
+let speechLang = 'auto';
+try { speechLang = localStorage.getItem('pahunch.speechLang') || 'auto'; } catch {}
+function renderLangs() {
+  $('#vlangs').replaceChildren(...Object.entries(SPEECH_LANGS).map(([k, v]) => {
+    const b = el('button', 'vlang' + (k === speechLang ? ' on' : ''), v.label);
+    b.onclick = () => { speechLang = k; try { localStorage.setItem('pahunch.speechLang', k); } catch {} renderLangs(); };
+    return b;
+  }));
+}
+renderLangs();
 $('#vdone').onclick = () => micStop?.();
 
 // ---------- Modes ----------

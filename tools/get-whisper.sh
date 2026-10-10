@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Offline speech-to-text for Pahunch: builds whisper.cpp's server in Termux and downloads a multilingual model.
 # Run once, from the repo folder:  bash tools/get-whisper.sh [base]
-#   default: ggml-small-q5_1 (190 MB, better for Hindi / Tamil / Kannada)   base: ggml-base (148 MB, faster)
+#   default: ggml-small-q5_1 (190 MB)   base: ggml-base (148 MB, faster)   medium: ggml-medium-q5_0 (539 MB, best for Indian languages)
 set -u
 cd "$(dirname "$0")/.."
 REPO="$PWD"
@@ -22,6 +22,7 @@ fi
 
 NAME=ggml-small-q5_1.bin
 [ "${1:-}" = "base" ] && NAME=ggml-base.bin
+[ "${1:-}" = "medium" ] && NAME=ggml-medium-q5_0.bin  # 539 MB: clearly better Hindi / Tamil / Kannada / Malayalam, ~2-3x slower
 mkdir -p models/whisper
 for N in "$NAME" ggml-base.bin; do  # base also powers the fast live transcript
   [ -s "models/whisper/$N" ] && [ "$(stat -c %s "models/whisper/$N")" -gt 50000000 ] && { echo "have $N"; continue; }

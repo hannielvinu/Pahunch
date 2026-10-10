@@ -37,12 +37,24 @@ function toWav16k(chunks, rate, lastSeconds = MAX_S) {
   return new Blob([buf], { type: 'audio/wav' });
 }
 
-async function transcribe(wav, translate, ms = 20000, url = URL_STT) {
+// Vocabulary hints per language: steer recognition towards direction words (Whisper "initial prompt").
+export const SPEECH_LANGS = {
+  auto: { label: 'Auto', prompt: '' },
+  en: { label: 'English', prompt: 'Directions: go straight, turn left, turn right, second lane, temple, pharmacy, blue gate, opposite, next to.' },
+  hi: { label: 'हिन्दी', prompt: 'रास्ता: सीधा आइए, बाएं मुड़िए, दाएं मुड़िए, दूसरी गली, मंदिर, नीला गेट, सामने, बगल में.' },
+  ta: { label: 'தமிழ்', prompt: 'வழி: நேராக வாங்க, இடது பக்கம் திரும்புங்க, வலது பக்கம், இரண்டாவது தெரு, கோவில், நீல கேட், எதிரே.' },
+  kn: { label: 'ಕನ್ನಡ', prompt: 'ದಾರಿ: ನೇರವಾಗಿ ಬನ್ನಿ, ಎಡಕ್ಕೆ ತಿರುಗಿ, ಬಲಕ್ಕೆ, ಎರಡನೇ ಕ್ರಾಸ್, ದೇವಸ್ಥಾನ, ನೀಲಿ ಗೇಟ್, ಎದುರು.' },
+  ml: { label: 'മലയാളം', prompt: 'വഴി: നേരെ വരൂ, ഇടത്തോട്ട് തിരിയുക, വലത്തോട്ട്, രണ്ടാമത്തെ റോഡ്, ക്ഷേത്രം, നീല ഗേറ്റ്, എതിരെ.' },
+};
+
+async function transcribe(wav, translate, ms = 20000, url = URL_STT, lang = 'auto') {
   const f = new FormData();
   f.append('file', wav, 'speech.wav');
   f.append('temperature', '0');
   f.append('response_format', 'json');
   if (translate) f.append('translate', 'true');
+  f.append('language', SPEECH_LANGS[lang] ? lang : 'auto'); // a known language beats auto-detect on short clips
+  if (SPEECH_LANGS[lang]?.prompt) f.append('prompt', SPEECH_LANGS[lang].prompt);
   const r = await fetch(url, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error(`speech server ${r.status}`);
   const j = await r.json();
@@ -50,7 +62,7 @@ async function transcribe(wav, translate, ms = 20000, url = URL_STT) {
 }
 
 // opts: { canvas, onPartial(text), onLevel(0..1) } -> { stop(), done: Promise<{ text, original, ms }> }
-export function listen({ canvas, onPartial, onState } = {}) {
+export function listen({ canvas, onPartial, onState, getLang = () => 'auto' } = {}) {
   let stopFn;
   const done = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
@@ -94,7 +106,7 @@ export function listen({ canvas, onPartial, onState } = {}) {
       // Live transcript only from the fast server (never queue work in front of the final pass).
       if (live && spoke && !busy && now - lastLive > 1200 && chunks.length > 4) {
         busy = true; lastLive = now;
-        transcribe(toWav16k(chunks, ctx.sampleRate, 10), false, 8000, URL_LIVE).then((t) => { if (t && !stopped) { original = t; onPartial?.(t); } }).catch(() => {}).finally(() => (busy = false));
+        transcribe(toWav16k(chunks, ctx.sampleRate, 10), false, 8000, URL_LIVE, getLang()).then((t) => { if (t && !stopped) { original = t; onPartial?.(t); } }).catch(() => {}).finally(() => (busy = false));
       }
       if (!stopped) raf = requestAnimationFrame(draw);
     };
@@ -112,7 +124,12 @@ export function listen({ canvas, onPartial, onState } = {}) {
     const t0 = performance.now();
     // One final pass in English (for the parser); the live transcript already holds the original words.
     let english = '';
-    try { english = await transcribe(wav, true); } catch (e) { if (!original) throw e; }
+    const lang = getLang();
+    // Original words (for the screen) and English (for the parser); English input needs only one pass.
+    try {
+      if (lang === 'en') english = await transcribe(wav, false, 20000, URL_STT, lang);
+      else { english = await transcribe(wav, true, 20000, URL_STT, lang); original = (await transcribe(wav, false, 20000, URL_STT, lang).catch(() => original)) || original; }
+    } catch (e) { if (!original) throw e; }
     return { text: english || original, original, ms: Math.round(performance.now() - t0) };
   })();
   return { stop: () => stopFn?.(), done };

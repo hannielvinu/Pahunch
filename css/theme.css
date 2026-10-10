@@ -228,3 +228,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vsheet.offline .vwave { display: block; }
 .vsheet.offline .waves { display: none; }
 #mic-status { overflow-wrap: anywhere; }
+
+.vlangs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.vlang { border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 10px; padding: 7px 12px; font: 600 13px Inter, sans-serif; }
+.vlang.on { background: var(--accent); border-color: var(--accent); color: #fff; }
