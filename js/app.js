@@ -139,6 +139,8 @@ function renderPlan() {
     : st && !p.fallback
       ? `Route by rule parser (instant), cross-checked on this phone by ${ai} · language: ${g.lang}`
       : `Route read by the rule parser in ${g.ms} ms · language: ${g.lang}${p.fallback && p.fallback !== "no on-device model running" ? " · AI cross-check skipped (unclear answer)" : ""}`;
+  if (p.rewrite) $('#parsed-by').textContent += `
+AI understood: "${p.rewrite}"`;
   $('#raw').hidden = !st;
   if (st) $('#raw-out').textContent = `Note: ${g.note}\n\n${st.out || '(empty)'}\n\n${st.tokensIn ?? '?'} prompt tokens (${st.cached ?? 0} from cache) · ${st.tokensOut ?? '?'} generated · ${(st.ms / 1000).toFixed(1)} s`;
   const showAgree = !!(p.rules && st);

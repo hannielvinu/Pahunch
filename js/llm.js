@@ -132,6 +132,37 @@ export function parseJson(out, note) {
   return g;
 }
 
+// Rewriter: the model's only job is to restate the directions as one plain English sentence in a fixed
+// vocabulary ("go past the X, take the second left, then the X opposite the Y, second floor"). Small models
+// do this well (it is translation + simplification, using the context of the whole message); the exact rule
+// engine then turns that sentence into steps.
+const SYSTEM_REWRITE = `You rewrite directions to a house, shop or spot as ONE short line of plain English, in the order travelled.
+The input may be English, Hindi, Tamil, Kannada, Malayalam or a mix, in any script, and may ramble.
+Use only these phrases, joined by commas:
+"go past the <landmark>", "take the first|second|third|fourth left|right", "then the <colour> <landmark> opposite|next to|near the <landmark>", "<number> floor".
+Keep the customer's proper names (temple names, shop names) in English letters. Translate colours and landmark words to English (mandir/kovil = temple, medical = pharmacy, gate, house, shop).
+Leave out filler, warnings and things not to do ("don't go there"). Never add landmarks that were not said. Output only the line.`;
+
+const SHOTS_REWRITE = [
+  ['Main road se seedha aao, Ganesh mandir ke baad doosri gali mein baayen mudo, phir MedPlus medical ke saamne neela gate. Doosri manzil.',
+    'go past the Ganesh temple, take the second left, then the blue gate opposite the MedPlus pharmacy, second floor'],
+  ['நேரா போங்க, முருகன் கோவில் தாண்டி ரெண்டாவது தெருவுல ரைட், அந்த பச்சை கேட் வீடு',
+    'go past the Murugan temple, take the second right, then the green gate'],
+  ['bus stand kitta irundhu straight-ah vaanga, left cut pannunga, Apollo pharmacy pakkathula manjal veedu',
+    'go past the bus stand, take the first left, then the yellow house next to the Apollo pharmacy'],
+  ['ok so u come from the metro side, theres a big Reliance store, dont go inside, take the third right after it, our house is the white one in front of the park, 2nd floor',
+    'go past the Reliance store, take the third right, then the white house opposite the park, second floor'],
+  ['walk to the registration desk, then left at the coffee machine and you will see the black chair near the stage',
+    'go past the registration desk, go past the coffee machine, take the first left, then the black chair near the stage'],
+];
+
+export function messagesRewrite(note) {
+  const m = [{ role: 'system', content: SYSTEM_REWRITE }];
+  for (const [q, a] of SHOTS_REWRITE) m.push({ role: 'user', content: q }, { role: 'assistant', content: a });
+  m.push({ role: 'user', content: note });
+  return m;
+}
+
 export function messages(note) {
   const m = [{ role: 'system', content: SYSTEM }];
   for (const [q, a] of SHOTS) m.push({ role: 'user', content: q }, { role: 'assistant', content: a });
@@ -244,13 +275,14 @@ export function ground(g, rules) {
   for (const s of g.steps) {
     if (s.kind !== 'turn') { steps.push(s); continue; }
     if (k < ruleTurns.length) { const r = ruleTurns[k++]; steps.push({ ...s, turn: r.turn, ordinal: r.ordinal, road: r.road ?? s.road }); }
-    // a turn the note has no word for is dropped
+    else if (!ruleTurns.length) steps.push(s); // rules saw no turn words (unfamiliar wording): trust the model
+    // otherwise: a turn the note has no word for is dropped
   }
   while (k < ruleTurns.length) steps.splice(Math.max(0, steps.length - 1), 0, { ...ruleTurns[k++] });
   // The relation word (opposite / next to) is also read from the note when the rules found one.
   const rRef = rules.steps.at(-1)?.ref, last = steps.at(-1);
   if (rRef && last?.ref) last.ref = { ...last.ref, relation: rRef.relation };
-  const out = { ...g, floor: rules.floor, steps };
+  const out = { ...g, floor: rules.floor ?? g.floor, steps };
   out.steps.forEach((s, i) => { s.n = i + 1; s.verify = verifyFor(s); });
   return out;
 }
@@ -278,7 +310,10 @@ async function nativeUp() {
 // Measured on the phone: the JSON-schema answer was ~3x longer (8.3 s/route) and no more accurate for a
 // 1.5B model, so the short line format (~2 s) is the default. NATIVE_JSON = true switches back.
 const NATIVE_JSON = false;
-const nativeBody = (note, extra) => JSON.stringify(NATIVE_JSON
+const NATIVE_REWRITE = true; // rewriter (plain English line -> rules); false = the older line format
+const nativeBody = (note, extra) => JSON.stringify(NATIVE_REWRITE
+  ? { messages: messagesRewrite(note), temperature: 0, max_tokens: 90, cache_prompt: true, stop: ['\n'], ...extra }
+  : NATIVE_JSON
   ? { messages: messagesJson(note), temperature: 0, max_tokens: 320, cache_prompt: true, response_format: { type: 'json_schema', json_schema: { name: 'route', schema: SCHEMA } }, ...extra }
   : { messages: messages(note), temperature: 0, max_tokens: 120, cache_prompt: true, ...extra });
 
@@ -386,11 +421,24 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   try {
     onStatus?.(backend === 'native' ? 'Asking the on-device model (llama.cpp)…' : 'Asking the on-device model (WebGPU)…');
     stats = backend === 'native' ? await runNative(note, onToken) : await runBrowser(note, onToken, device, onProgress);
+    if (backend === 'native' && NATIVE_REWRITE) {
+      const line = stats.out.split('\n')[0].replace(/^["'\s]+|["'\s]+$/g, '');
+      const rw = parseRules(line);
+      // Names in the rewrite must come from the customer's words (skipped for native-script notes: transliterated).
+      for (const s of rw.steps) for (const lm of [s.landmark, s.ref?.landmark]) if (lm?.name) lm.name = cleanName(lm.name, note);
+      rw.steps.forEach((s) => { s.verify = verifyFor(s); });
+      const g = ground(rw, rules);
+      Object.assign(g, { lang: rules.lang, parser: 'llm', rewrite: line });
+      const agree = agrees(g, rules);
+      const turns = (x) => x.steps.filter((s) => s.kind === 'turn').length;
+      // Rules exact and complete + same route: use them. Otherwise the AI's reading of the context wins when it
+      // is complete and its turn count matches what the note says.
+      const useAI = !complete(rules) ? complete(g) || g.steps.length > 1 : !agree && complete(g) && (turns(g) === turns(rules) || turns(rules) === 0);
+      return { graph: useAI ? g : rules, llmGraph: g, stats, rules, agree, rewrite: line };
+    }
     const g = ground(backend === 'native' && NATIVE_JSON ? parseJson(stats.out, note) : parseLines(stats.out, note), rules);
     Object.assign(g, { lang: rules.lang, parser: 'llm' });
     const agree = agrees(g, rules);
-    // Rules are exact and instant on the patterns they know (measured: they beat the 1.5B model on the test
-    // routes); the AI route is used only when the rules cannot read the whole route.
     return { graph: complete(rules) ? rules : g, llmGraph: g, stats, rules, agree };
   } catch (e) {
     console.warn('LLM parse failed, using rules', e);

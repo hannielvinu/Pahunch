@@ -249,3 +249,4 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 #ssheet .vwave { display: block; height: 56px; }
 #s-mic.live { animation: live 1s ease-in-out infinite; }
 #s-list { align-self: stretch; text-align: left; }
+#parsed-by { white-space: pre-line; }

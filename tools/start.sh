@@ -7,8 +7,8 @@ termux-wake-lock 2>/dev/null
 # Default: Qwen2.5-1.5B as the cross-check (Qwen3-4B measured 3/7 at 5.4 s/route on this phone: no-go).
 # MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf bash tools/start.sh  to try the 4B model.
 if [ -z "${MODEL:-}" ]; then
-  MODEL=models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf
-  [ -f "$MODEL" ] || MODEL=models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf
+  # Gemma 3n E2B (Google, mobile-first, strong in Indian languages) if downloaded, else Qwen2.5-1.5B.
+  MODEL=$(ls models/gguf/gemma-3n-E2B-it-Q4_0.gguf models/gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf models/gguf/Qwen3-4B-Instruct-2507-Q4_0.gguf 2>/dev/null | head -1)
 fi
 echo "Model: $MODEL"
 
