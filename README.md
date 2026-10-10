@@ -35,7 +35,7 @@ Modes: delivery rider, ambulance / 108 (no questions, torch, emergency prompts),
 | Qwen3-4B Q4_0 (go/no-go) | 3/7 test routes, 5.4 s/route: no-go |
 | Qwen2.5-1.5B with JSON-schema output | 1/7, 8.3 s/route: reverted to the short line format |
 | Rule engine on the test routes | 7/7, under 5 ms |
-| **Gemma 3n E2B Q4_0 rewriter** (any language → one plain English line → rules), llama.cpp CPU, 6 threads | **6/7 messy multilingual test routes, 4.8 s/route** (the miss: it dropped the starting landmark; prompt fixed) |
+| **Gemma 3n E2B Q4_0 rewriter** (any language → one plain English line → rules), llama.cpp CPU, 6 threads | **7/7 messy multilingual test routes, 5.0 s/route** (6/7 at 4.8 s before keeping starting points and "don't go there" landmarks) |
 | Qwen3-1.7B Q4_0 rewriter | 4/7, 3.8 s/route |
 | Whisper (small q5_1 final pass, base for live transcript) | from ~1 min down to a few seconds after tuning (15 s audio window, 6 threads, flash attention, greedy) |
 
