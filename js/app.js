@@ -642,7 +642,7 @@ $('#mic').onclick = async () => {
   try {
     let heard = '';
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
-    if (voiceAvailable && speechEngine !== 'whisper') {
+    if (voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
       $('#vtitle').textContent = 'Listening…';
       micStop = () => dictate.stop?.();
       const t0 = performance.now();
@@ -657,7 +657,7 @@ $('#mic').onclick = async () => {
     // 2) Fallback: on-device Whisper (works with no network and no speech pack).
     if (!heard && (await sttAvailable())) {
       sheet.classList.add('offline');
-      $('#vtitle').textContent = 'Listening · on-device';
+      $('#vtitle').textContent = navigator.onLine ? 'Listening · on-device' : 'Listening · offline, on this phone';
       const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; }, onState: (m) => ($('#vtitle').textContent = m), getLang: () => speechLang });
       micStop = rec.stop;
       const r = await rec.done;
@@ -765,7 +765,7 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (voiceAvailable && speechEngine !== 'whisper') {
+    if (voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
       micStop = () => dictate.stop?.();
       try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p)); } catch (e) { if (!(await sttAvailable())) throw e; }
     }
