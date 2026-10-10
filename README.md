@@ -2,18 +2,23 @@
 
 **Maps get you to the lane. Pahunch gets you to the door.**
 
-**The customer's voice note becomes a camera-checked route, in the rider's language, on a phone with no network.**
+**The language bridge for the last 100 metres.** The customer's voice note becomes steps in the rider's language,
+with signboards read along the way. At the door, Pahunch gives the rider a question in the customer's language, one
+whose answer the rider can understand.
 
-Indian customers already explain the way to their door, as a voice note or message in their own language and mix:
-*"Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate."* Riders can't use that at the lane:
-it's audio, it's in a language they may not speak, and nothing checks it. Pahunch takes that note as it is
-(shared from WhatsApp into the installed app, opened as a file, or handed over by a partner app at the last 100 m),
-transcribes it on the phone, turns it into numbered steps in the **rider's** language (a Tamil note becomes a Hindi
-route), and guides to the door by voice and vibration, with the camera **confirming each landmark** (signboard,
-object, gate colour) before it says "arrived". Nothing leaves the phone.
+*Pahunch only says what it can stand behind: checked phrases, answerable questions, a tick only on a sign it read.*
 
-What it is not: not a map, not a door database, not a call translator. One job: unstructured voice directions in,
-a verified route out, offline.
+- **Voice note in:** handed over by a partner app at the last 100 m, shared from WhatsApp, or opened as a file;
+  transcribed on the phone (Whisper, with timings). No third-party AI hears the customer.
+- **Steps in the rider's language,** English underneath. Each step has **▶ hear it**, the 2–3 s of the customer's
+  own voice it came from. Anything not turned into a step is shown under **Customer also said**, in her words.
+- **Honest checks:** ✓ only for a distinctive signboard name the camera read (across scripts: a Tamil name matches an
+  English sign); turns, colours and objects are cues; everything else says "you confirm".
+- **At the door:** "Arrived ✓" only when the door's own sign was read; otherwise "You're at the place the customer
+  described" and the **door card**: 30 fixed phrases (5 × 6 languages), native script + romanised + Speak, answered by
+  yes/no or a number, with "Listen for" words.
+- **No generated language reaches a person.** Gemma 3n on the phone only helps *read* messy notes, and its landmarks
+  must be in the customer's words (22/22 invented landmarks dropped in tests).
 
 ## What it does
 
@@ -84,7 +89,7 @@ bash tools/start.sh             # LLM :8081, speech :8082/:8083, app :8080
 Open `http://localhost:8080` in Chrome (localhost is a secure context: camera, mic, sensors, vibration work).
 
 ## Tests and evaluation
-- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs` · `node tests/understanding.test.mjs` (chat, injection, invented landmarks, with a stand-in llama-server) · `node tests/languages.test.mjs` + `node tests/heldout.test.mjs` (70 routes across English, Hindi, Tamil, Kannada, Malayalam in native script, romanised and mixed)
+- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs` · `node tests/understanding.test.mjs` (chat, injection, invented landmarks, with a stand-in llama-server) · `node tests/languages.test.mjs` + `node tests/heldout.test.mjs` (70 routes across English, Hindi, Tamil, Kannada, Malayalam in native script, romanised and mixed) · `node tests/vision.test.mjs` · `node tests/trust.test.mjs` (invented landmarks, door card phrases, cross-script signs, step sources)
 - `node tools/eval-llm.mjs`: on-device LLM accuracy and latency on 7 routes (needs llama-server)
 - `node tools/eval-voice.mjs`: recorded voice samples → speech → route, scored against the intended route
 

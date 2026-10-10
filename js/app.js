@@ -1,7 +1,7 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
-import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords } from './parser.js';
+import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords, leftovers } from './parser.js';
 import { parseNote, warmNative, complete, agrees, translateLine } from './llm.js';
-import { Vision, matchSigns, ocrLangs } from './vision.js';
+import { Vision, matchSigns, ocrLangs, distinctive } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
 import { say as speakAloud, text, buzz, stepText, Compass, unlockSpeech, localName, BUZZ } from './guide.js';
@@ -9,7 +9,8 @@ import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable, localSpeechStatus, installLocalSpeech, localeFor } from './voice.js';
-import { listen, sttAvailable, SPEECH_LANGS, transcribeNote } from './stt.js';
+import { listen, sttAvailable, SPEECH_LANGS, transcribeNote, clipAt } from './stt.js';
+import { ASK, card as askCard } from './askcard.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -74,7 +75,7 @@ for (const [lang, note] of Object.entries(SAMPLES)) {
   $('#samples').append(b);
 }
 
-$('#note').addEventListener('input', () => { state.altNote = null; state.spokenLang = null; });
+$('#note').addEventListener('input', () => { state.altNote = null; state.spokenLang = null; if (!$('#note').value.trim()) state.vnote = null; });
 
 $('#paste').onclick = async () => {
   try {
@@ -121,6 +122,7 @@ $('#parse').onclick = async () => {
   $('#mic-status').hidden = true;
   state.parse = res;
   state.graph = res.graph;
+  state.custLang = null;
   if (state.lastVoice) { logVoice({ ...state.lastVoice, used: note, plan: res.graph.steps.map(describe).join(' → '), engine: res.graph.parser }); state.lastVoice = null; }
   state.graph.ms = Math.round((performance.now() - t0) * 10) / 10;
   state.graph.note = note;
@@ -155,13 +157,18 @@ $('#use-other').onclick = () => {
 };
 
 // ---------- Plan ----------
+// How each step can be checked, said plainly: a distinctive sign the camera can read is the only real check;
+// colours, objects and turns are cues; everything else is the rider's call.
 function chips(step) {
   const v = step.verify, out = [];
-  for (const s of v.signs) out.push(['sign', s]);
-  if (!v.signs.length) for (const s of v.alt.slice(0, 2)) out.push(['type', s]);
-  if (v.colour) out.push(['colour', v.colour]);
-  if (v.compass) out.push(['compass', `compass ${v.compass}`]);
-  out.push([`conf-${v.confidence}`, v.confidence]);
+  const strong = v.signs.filter((w) => distinctive(w));
+  for (const w of strong) out.push(['sign', `sign: ${w}`]);
+  for (const w of v.signs.filter((x) => !distinctive(x))) out.push(['type', `common name: ${w}`]);
+  if (!v.signs.length) for (const w of v.alt.slice(0, 2)) out.push(['type', `word: ${w}`]);
+  if (v.colour) out.push(['colour', `colour cue: ${v.colour}`]);
+  for (const o of v.objects || []) out.push(['type', `object cue: ${o}`]);
+  if (v.compass) out.push(['compass', 'turn detected by sensor']);
+  out.push(strong.length ? ['conf-high', 'camera can check'] : step.kind === 'turn' ? ['conf-medium', 'cue only'] : v.colour || v.alt.length || (v.objects || []).length ? ['conf-medium', 'cue only'] : ['conf-low', 'you confirm']);
   return out;
 }
 
@@ -195,6 +202,15 @@ AI understood: "${p.rewrite}"`;
     const li = el('li', `step kind-${s.kind}`);
     if (state.lang && state.lang !== 'en') { li.append(el('div', 'step-line', stepText(s, state.lang)), el('div', 'step-en', describe(s))); }
     else li.append(el('div', 'step-line', describe(s)));
+    if (state.vnote?.segments?.length) {
+      const clip = clipAt(state.vnote.segments, s.at ?? i / Math.max(1, g.steps.length));
+      if (clip) {
+        const b = el('button', 'hear', '▶ hear it');
+        b.title = 'Play what the customer said for this step';
+        b.onclick = (e) => { e.stopPropagation(); playClip(clip, b); };
+        li.append(b);
+      }
+    }
     const row = el('div', 'chips');
     for (const [cls, label] of chips(s)) row.append(el('span', `tag ${cls}`, label));
     li.append(row);
@@ -205,10 +221,51 @@ AI understood: "${p.rewrite}"`;
   const add = el('li', 'step add-step', '+ Add a step');
   add.onclick = () => openEditor(g.steps.length);
   list.append(add);
+  renderPlanNotes(g);
   $('#floor').textContent = g.floor != null ? `Floor: ${g.floor === 0 ? 'ground' : g.floor}` : '';
 }
 
 $('#edit').onclick = () => show('home');
+
+// Play the moment of the voice note a step came from (2-3 s): every step traceable to what was said.
+let clipTimer = null;
+function playClip({ start, end }, btn) {
+  const a = $('#vnote-audio');
+  if (!a.src) return;
+  clearTimeout(clipTimer);
+  document.querySelectorAll('.hear.playing').forEach((x) => x.classList.remove('playing'));
+  btn?.classList.add('playing');
+  a.currentTime = start;
+  a.play().catch(() => {});
+  clipTimer = setTimeout(() => { a.pause(); btn?.classList.remove('playing'); }, Math.max(800, (end - start) * 1000));
+}
+
+// Where the customer's directions start, what is clearly missing, and what didn't become a step.
+function renderPlanNotes(g) {
+  const first = g.steps[0];
+  const startEl = $('#plan-start'), gapEl = $('#plan-gap');
+  startEl.hidden = false;
+  startEl.textContent = first?.kind === 'turn'
+    ? "Customer didn't say where these turns start: count them from where you are now."
+    : first?.landmark ? `Start from: ${describe({ ...first, kind: 'pass' }).replace(/^Pass /, '')} (the customer's first landmark)` : '';
+  if (!startEl.textContent) startEl.hidden = true;
+  // Only hard gaps: no description of the destination at all.
+  const last = g.steps.at(-1);
+  gapEl.hidden = !!(last?.landmark || last?.ref);
+  gapEl.textContent = gapEl.hidden ? '' : "The customer didn't describe the door itself: at the end, use Ask (gate? floor?).";
+  const rest = leftovers(g.note || $('#note').value);
+  $('#also').hidden = !rest.length;
+  $('#also-list').replaceChildren(...rest.map((t) => {
+    const li = el('li');
+    li.append(el('span', null, `"${t}"`));
+    if (state.vnote?.segments?.length) {
+      const note = (g.note || $('#note').value), at = note.indexOf(t);
+      const clip = at >= 0 ? clipAt(state.vnote.segments, at / Math.max(1, note.length)) : null;
+      if (clip) { const b = el('button', 'hear', '▶ hear it'); b.onclick = () => playClip(clip, b); li.append(b); }
+    }
+    return li;
+  }));
+}
 
 // ---------- Fix a step (tap on the plan) ----------
 // Turns: left/right and which turn. Landmarks: type what it is ("blue gate", "Ganesha temple"), optional colour.
@@ -322,10 +379,11 @@ function ask(target) {
   buzz('ask');
 }
 
-$('#yes').onclick = () => { $('#ask').hidden = true; state.asking = false; confirmStep(T().spotted(spokenName(step().landmark))); };
+$('#yes').onclick = () => {
+  if (step()?.kind === 'arrive') state.arriveBy = 'rider'; $('#ask').hidden = true; state.asking = false; confirmStep(T().spotted(spokenName(step().landmark))); };
 $('#notyet').onclick = () => { $('#ask').hidden = true; state.asking = false; state.askCooldown = performance.now() + 4000; };
 $('#turned').onclick = () => confirmStep(T().turned);
-$('#skip').onclick = () => confirmStep();
+$('#skip').onclick = () => { if (step()?.kind === 'arrive') state.arriveBy = 'rider'; confirmStep(); };
 $('#stop').onclick = () => show('plan');
 
 function renderSeen(words, matched) {
@@ -341,7 +399,7 @@ function onOcr(res) {
   // Boxes are drawn for every read, also while a question is open: green = this step's sign, red = decoys.
   const m = s.kind === 'turn' ? { hit: null, word: null } : matchSigns(res.words, s.verify);
   const confirms = s.kind === 'pass' && m.hit === 'name';
-  overlay.setBoxes(res.boxes, m.word, m.word && `✓ ${m.word} · step ${s.n} ${confirms ? 'confirmed' : 'spotted'}`);
+  overlay.setBoxes(res.boxes, m.word, m.word && (m.hit === 'name' ? `✓ ${m.word} · sign read` : `${m.word}? · check`));
   renderSeen(res.fresh || res.words, m.word);
   if (state.asking || !m.hit) return;
   if (s.kind === 'pass') {
@@ -363,6 +421,7 @@ function decideArrive() {
   const sign = now - (state.signSeenAt || 0) < 10000, colour = now - (state.colourSeenAt || 0) < 4000;
   const needColour = !!s.verify.colour, needSign = s.verify.signs.length > 0;
   const ownName = sign && state.signHit === 'name' && s.landmark?.name;
+  state.arriveBy = ownName ? 'own' : 'described';
   if (ownName || (sign && (!needColour || colour)) || (colour && !needSign)) return confirmStep();
   const firstCue = Math.min(...[state.signSeenAt, state.colourSeenAt].filter(Boolean));
   if ((sign || colour) && now - firstCue > (ambulance() ? 2000 : 4000)) {
@@ -428,7 +487,7 @@ function onDetections(dets) {
   const now = performance.now();
   state.objHits = now - (state.objAt || 0) < 1000 ? (state.objHits || 0) + 1 : 1;
   state.objAt = now;
-  const label = `✓ ${hit.label} · step ${s.n}`;
+  const label = `seen: ${hit.label} · step ${s.n}`;
   if (state.objHits < 2 || state.asking) return { label: hit.label, text: label };
   if (s.kind === 'pass') confirmStep(T().spotted(spokenName(s.landmark)));
   else { state.signSeenAt = now; state.signHit = s.verify.signs.length ? 'type' : 'name'; decideArrive(); }
@@ -471,6 +530,7 @@ function detectLoop() {
 
 async function startGuide() {
   state.i = 0;
+  state.arriveBy = null;
   state.startedAt = performance.now();
   show('guide');
   try {
@@ -532,8 +592,12 @@ function arrive() {
 // Door card: saved straight away, then filled in as the GPS fix and the photo arrive.
 function showCard(card, fresh) {
   state.card = card;
-  $('#tick').hidden = !fresh;
-  $('#arrive-title').textContent = fresh ? "You've arrived" : 'Saved door';
+  const own = state.arriveBy === 'own';
+  $('#arrive-title').textContent = !fresh ? 'Arrival record' : own ? "You've arrived ✓" : "You're at the place the customer described";
+  $('#arrive-sub').hidden = !fresh;
+  $('#arrive-sub').textContent = own ? "The door's own sign was read." : 'Nothing here proves it is their door: check with the customer before handing over.';
+  $('#arrive-ask').hidden = !fresh || own;
+  $('#tick').hidden = !fresh || !own; // the big tick only when the door's own sign was read
   $('#del').hidden = fresh;
   renderCard();
   // Fresh arrival: tick pops with a ring burst, then the door card rises in (CSS, see .celebrate).
@@ -753,6 +817,7 @@ $('#mic').onclick = async () => {
   status.hidden = true;
   const native = ['hi', 'ta', 'kn', 'ml', 'tanglish', 'hinglish'].includes(speechLang);
   const done = (heard, english, ms) => {
+    state.vnote = null;
     $('#note').value = heard;
     state.altNote = english && english !== heard ? english : null;
     state.spokenLang = { tanglish: 'ta', hinglish: 'hi', auto: null }[speechLang] ?? speechLang;
@@ -1098,6 +1163,7 @@ async function openVoiceNote(blob, { name = 'voice note', from = '' } = {}) {
     box.hidden = true;
     if (!r.text) { status.textContent = 'No speech found in that voice note. Play it and type the directions.'; return; }
     $('#note').value = r.text;
+    state.vnote = { segments: r.segments, text: r.text };
     state.altNote = null;
     state.spokenLang = null;
     state.lastVoice = { at: new Date().toLocaleTimeString(), chip: 'voice note', heard: r.text, english: '', ms: r.ms };
@@ -1126,6 +1192,57 @@ async function takeShared() {
 // "Guide me in": the rider's own language for the plan and the voice, whatever language the customer used.
 try { const g = localStorage.getItem('pahunch.guideLang'); if (g) $('#voice').value = g; } catch {}
 $('#voice').onchange = () => { try { localStorage.setItem('pahunch.guideLang', $('#voice').value); } catch {} };
+
+// ---------- Door card: say this to the customer ----------
+const askStep = () => (state.graph?.steps || []).at(-1);
+function custLang() {
+  const l = state.custLang || state.parse?.rules?.lang || state.graph?.lang || 'en';
+  return ASK[l] ? l : 'en';
+}
+function renderAsk() {
+  const c = askCard(askStep(), custLang());
+  $('#ask-note').textContent = `In ${c.name}, word for word. Names are kept as the customer said them.${c.checked ? ' Checked by a native speaker.' : ''}`;
+  $('#ask-lines').replaceChildren(...c.lines.map((l) => {
+    const li = el('li'), say1 = el('div', 'say');
+    say1.append(el('div', 'nat', l.native));
+    if (l.roman !== l.native) say1.append(el('div', 'rom', l.roman));
+    const b = el('button', 'btn ghost spk', 'Speak');
+    b.onclick = () => speakAloud(l.native, c.lang);
+    li.append(say1, b);
+    return li;
+  }));
+  const words = (list) => list.map(([n, r]) => (r && r !== n ? `${n} (${r})` : n)).join(' · ');
+  $('#ask-yes').textContent = words(c.yes);
+  $('#ask-no').textContent = words(c.no);
+  $('#ask-nums').textContent = c.nums.map(([e, n, r]) => (c.lang === 'en' ? e : `${e} / ${n}${r ? ` (${r})` : ''}`)).join(' · ');
+}
+function openAsk() {
+  unlockSpeech();
+  $('#ask-lang').replaceChildren(...Object.entries(ASK).map(([k, v]) => { const o = el('option', null, v.name); o.value = k; return o; }));
+  $('#ask-lang').value = custLang();
+  renderAsk();
+  $('#asheet').hidden = false;
+}
+$('#ask-lang').onchange = () => { state.custLang = $('#ask-lang').value; renderAsk(); };
+$('#ask-open').onclick = openAsk;
+$('#arrive-ask').onclick = openAsk;
+$('#ask-close').onclick = () => ($('#asheet').hidden = true);
+// Where a chat channel exists (the partner app's chat, or WhatsApp when numbers are shared): photo + question.
+$('#ask-photo').onclick = async () => {
+  const c = askCard(askStep(), custLang());
+  const textMsg = c.lines.filter((l) => l.key === 'lead' || l.key === 'gate').map((l) => l.native).join(' ');
+  const photo = state.card?.photo || doorPhoto();
+  try {
+    if (photo && navigator.canShare) {
+      const blob = await (await fetch(photo)).blob();
+      const file = new File([blob], 'door.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) return await navigator.share({ files: [file], text: textMsg });
+    }
+    if (navigator.share) return await navigator.share({ text: textMsg });
+    await navigator.clipboard.writeText(textMsg);
+    toast('Question copied: paste it in the chat with the customer.');
+  } catch (e) { if (e.name !== 'AbortError') toast(`Couldn't share: ${e.message}`); }
+};
 
 // ---------- Developer mode: tap the logo 5 times (or open with ?dev) ----------
 // Sensor readouts, the field-test panel, voice log and engine switch stay out of the rider's way.

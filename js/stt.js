@@ -65,6 +65,22 @@ async function transcribe(wav, translate, ms = 20000, url = URL_STT, lang = 'aut
   return (j.text || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim(); // drop [BLANK_AUDIO], (music)…
 }
 
+// Same, with Whisper's segment timings: { text, segments: [{ start, end, text }] } (seconds within this audio).
+async function transcribeTimed(wav, lang = 'auto', ms = 60000) {
+  const f = new FormData();
+  f.append('file', wav, 'speech.wav');
+  f.append('temperature', '0');
+  f.append('response_format', 'verbose_json');
+  f.append('language', SPEECH_LANGS[lang] ? SPEECH_LANGS[lang].code || lang : 'auto');
+  if (SPEECH_LANGS[lang]?.prompt) f.append('prompt', SPEECH_LANGS[lang].prompt);
+  const r = await fetch(URL_STT, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
+  if (!r.ok) throw new Error(`speech server ${r.status}`);
+  const j = await r.json();
+  const clean = (t) => (t || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const segments = (j.segments || []).map((g) => ({ start: +g.start || 0, end: +g.end || 0, text: clean(g.text) })).filter((g) => g.text);
+  return { text: clean(j.text) || segments.map((g) => g.text).join(' '), segments };
+}
+
 // opts: { canvas, onPartial(text), onLevel(0..1) } -> { stop(), done: Promise<{ text, original, ms }> }
 export function listen({ canvas, onPartial, onState, getLang = () => 'auto' } = {}) {
   let stopFn;
@@ -142,7 +158,7 @@ export function listen({ canvas, onPartial, onState, getLang = () => 'auto' } = 
 // A customer's voice note (WhatsApp .opus/.ogg, .m4a, .mp3, .webm…) transcribed on this phone by Whisper.
 // The browser decodes it; it is cut into 14 s pieces (the server's audio window) and each piece is transcribed
 // in order, in the language it was spoken (the route reader understands every script; names stay as said).
-// -> { text, seconds, ms }
+// -> { text, segments: [{ start, end, text }], seconds, ms }
 export async function transcribeNote(blob, { lang = 'auto', onProgress } = {}) {
   const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
   const ctx = new AC();
@@ -158,7 +174,27 @@ export async function transcribeNote(blob, { lang = 'auto', onProgress } = {}) {
     for (let i = 0; i < seg.length; i += 8) e += seg[i] * seg[i];
     if (Math.sqrt(e / (seg.length / 8 || 1)) < 0.004) continue; // silence
     onProgress?.(k + 1, parts);
-    out.push(await transcribe(toWav16k([seg], rate, 15), false, 60000, URL_STT, lang));
+    const off = (k * piece) / rate, len = seg.length / rate;
+    const r = await transcribeTimed(toWav16k([seg], rate, 15), lang);
+    if (!r.text) continue;
+    // Timings for every piece of text (the whole piece if the server gave no segment timings).
+    const segs = r.segments.length ? r.segments : [{ start: 0, end: len, text: r.text }];
+    for (const g of segs) out.push({ start: off + g.start, end: off + Math.min(len, g.end || len), text: g.text });
   }
-  return { text: out.join(' ').replace(/\s+/g, ' ').trim(), seconds: Math.round(n / rate), ms: Math.round(performance.now() - t0) };
+  return { text: out.map((g) => g.text).join(' ').replace(/\s+/g, ' ').trim(), segments: out, seconds: Math.round(n / rate), ms: Math.round(performance.now() - t0) };
+}
+
+// Where in the voice note a point of the transcript (0..1 through its text) was said: { start, end } in seconds,
+// a short window around it, from the segment timings.
+export function clipAt(segments, frac) {
+  if (!segments?.length) return null;
+  const total = segments.reduce((n, g) => n + g.text.length + 1, 0);
+  let pos = Math.max(0, Math.min(1, frac)) * total, t = segments[0].start;
+  for (const g of segments) {
+    const L = g.text.length + 1;
+    if (pos <= L) { t = g.start + (g.end - g.start) * (pos / L); break; }
+    pos -= L;
+    t = g.end;
+  }
+  return { start: Math.max(0, t - 0.4), end: Math.min(segments.at(-1).end, t + 2.8) };
 }

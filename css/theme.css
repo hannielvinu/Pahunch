@@ -322,3 +322,27 @@ body.flashing::after { content: ""; position: fixed; inset: 0; z-index: 11; poin
 .vnote audio { width: 100%; height: 36px; }
 /* Plan step in the rider's language, English underneath */
 .step-en { font-size: 12.5px; color: var(--dim); margin-top: 1px; }
+/* Plan notes: the customer's start, hard gaps, words not turned into steps */
+.plan-note { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); font-size: 14px; }
+.plan-note[hidden], .also[hidden] { display: none; }
+.plan-note.gap { background: #fff6e6; border: 1px solid #f3d9a4; }
+.also { background: var(--panel); border: 1px dashed var(--line); border-radius: 14px; padding: 10px 12px; }
+.also ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.also li { display: flex; gap: 8px; align-items: center; font-size: 15px; }
+.hear { border: 1px solid var(--line); background: var(--panel); color: var(--accent); border-radius: 999px; font: 650 12px Inter, sans-serif; padding: 4px 10px; flex: none; }
+.hear.playing { background: var(--soft); }
+/* Door card */
+.acard { max-height: 88vh; overflow: auto; }
+.arow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.arow select { min-height: 38px; border-radius: 10px; padding: 4px 8px; font: 600 14px Inter, sans-serif; }
+.alines { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.alines li { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; background: var(--panel); }
+.alines .say { flex: 1; }
+.alines .nat { font-size: 18px; font-weight: 650; line-height: 1.35; }
+.alines .rom { font-size: 13.5px; color: var(--dim); margin-top: 2px; }
+.alines .spk { flex: none; min-height: 40px; padding: 6px 12px; }
+.listen { background: var(--panel-2); border-radius: 14px; padding: 10px 12px; }
+.listen p { margin: 6px 0 0; font-size: 15px; }
+.listen .lbl { display: inline-block; min-width: 72px; font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
+.listen .lbl.yes { color: #15803d; } .listen .lbl.no { color: #b91c1c; }
+#arrive-sub { margin: -6px 0 0; }

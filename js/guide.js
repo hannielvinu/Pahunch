@@ -1,4 +1,5 @@
 // Voice prompts (en/hi/kn/ta), vibration vocabulary and the compass turn detector.
+import { translit } from './native.js';
 
 const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', bn: 'bn-IN' };
 
@@ -161,7 +162,7 @@ export function localName(lm, lang = 'en') {
   if (!lm) return text(lang).dest;
   const L = LOCAL[lang] || {};
   const type = lm.type === 'other' || (lm.name && (lm.type === 'sign' || lm.type === 'desk')) ? '' : L[lm.type] || lm.type.replace('_', ' ');
-  return [lm.colour ? L[lm.colour] || lm.colour : '', lm.name, type].filter(Boolean).join(' ');
+  return [lm.colour ? L[lm.colour] || lm.colour : '', readableName(lm.name, lang), type].filter(Boolean).join(' ');
 }
 
 // A plan step in the rider's language ("ரெண்டாவது தெருவுல லெஃப்ட் திரும்புங்க.", "MedPlus मेडिकल देखते रहिए।").
@@ -171,4 +172,14 @@ export function stepText(step, lang = 'en') {
   const name = localName(step.landmark, lang);
   if (step.kind === 'pass') return T.look(name);
   return `${T.dest}: ${name}${step.ref?.landmark ? ` · ${localName(step.ref.landmark, lang)}` : ''}`;
+}
+
+// A name in a script the rider may not read gets its sound in Latin letters: "முருகன் (Murukan)".
+const SCRIPT_OF = { hi: 0x0900, bn: 0x0980, ta: 0x0b80, kn: 0x0c80, ml: 0x0d00 };
+function readableName(name, lang) {
+  if (!name || !/[\u0900-\u0dff]/.test(name)) return name;
+  const cp = [...name].find((c) => /[\u0900-\u0dff]/.test(c)).codePointAt(0), base = cp - (cp % 0x80);
+  if (SCRIPT_OF[lang] === base) return name;
+  const t = translit(name);
+  return `${name} (${t.charAt(0).toUpperCase()}${t.slice(1)})`;
 }

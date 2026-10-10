@@ -57,7 +57,6 @@
   <div class="tabs" role="tablist">
     <button class="on" data-tab="rider">Rider</button>
     <button data-tab="customer">Customer</button>
-    <button data-tab="dispatch">108 dispatch</button>
   </div>
   <main>
     <!-- ===== Rider ===== -->
@@ -89,16 +88,6 @@
       <p class="note" id="c-done"></p>
     </section>
 
-    <!-- ===== 108 dispatch ===== -->
-    <section data-pane="dispatch" class="card hidden">
-      <div class="row"><p class="label">108 · Call #A-1173</p><span class="tag red">Emergency</span></div>
-      <strong style="font-size:17px">Caller: chest pain, elderly man</strong>
-      <p class="label" style="margin-top:12px">Caller's description</p>
-      <div class="quote" id="d2" style="border-left-color:var(--amb)">Exit gate se seedha, coffee counter ke baad right, red chair ke paas.</div>
-      <a class="btn pah amb" id="go-108">Guide the ambulance crew to the spot</a>
-      <p class="note">Emergency mode: no questions asked, torch on in the dark, big prompts.</p>
-    </section>
-
     <p class="note">How partners integrate: one link carrying the customer's voice note or words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
   </main>
   <script type="module">
@@ -112,7 +101,7 @@
     document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
       document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
       document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== b.dataset.tab));
-      $('#title').textContent = { rider: 'Rider · Active order', customer: 'Customer · Your order', dispatch: '108 · Ambulance dispatch' }[b.dataset.tab];
+      $('#title').textContent = { rider: 'Rider · Active order', customer: 'Customer · Your order' }[b.dataset.tab];
     });
 
     // Rider: directions, remembered door, approach, last-100 m hand-over
@@ -183,8 +172,6 @@
     };
     $('#c-text').value = directions() === SAMPLE ? '' : directions();
 
-    // 108
-    $('#go-108').href = link($('#d2').textContent, 'ambulance', { job: 'A-1173', who: 'Caller: chest pain, elderly man', src: '108 dispatch' });
   </script>
 </body>
 </html>

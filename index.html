@@ -85,7 +85,6 @@
     <h2>Who's navigating?</h2>
     <p class="meta">Same engine, tuned for the job.</p>
     <button class="role" data-mode="delivery"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-scooter"/></svg></span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
-    <button class="role" data-mode="ambulance"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-ambulance"/></svg></span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
     <button class="role" data-mode="silent"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-vibrate"/></svg></span><span><strong>Silent guidance</strong><em>No sound needed: every instruction is shown big and felt as vibration</em></span></button>
     <button class="role" data-mode="ride"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-car"/></svg></span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
   </section>
@@ -214,7 +213,14 @@
       <span id="agree-text"></span>
       <button id="use-other" class="btn ghost" hidden></button>
     </div>
+    <p id="plan-start" class="plan-note" hidden></p>
+    <p id="plan-gap" class="plan-note gap" hidden></p>
     <ol id="steps" class="steps"></ol>
+    <div id="also" class="also" hidden>
+      <strong>Customer also said</strong>
+      <p class="meta">Not turned into steps. Shown in their own words, so nothing is lost.</p>
+      <ul id="also-list"></ul>
+    </div>
     <p id="floor" class="meta big-meta"></p>
     <details id="raw" class="panel" hidden style="display:none !important">
       <summary>On-device model output</summary>
@@ -253,6 +259,7 @@
       <div class="row">
         <button id="stop" class="btn ghost icon-btn" aria-label="Stop"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
         <button id="handsfree" class="btn ghost" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Hands-free</button>
+        <button id="ask-open" class="btn ghost">Ask</button>
         <button id="skip" class="btn ghost">Skip<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
         <button id="turned" class="btn primary" hidden>I've turned</button>
       </div>
@@ -262,6 +269,8 @@
   <section id="arrive" class="screen arrive" hidden>
     <div id="tick" class="tick"><svg class="i xl" aria-hidden="true"><use href="#i-check"/></svg></div>
     <h2 id="arrive-title">You've arrived</h2>
+    <p id="arrive-sub" class="meta center" hidden></p>
+    <button id="arrive-ask" class="btn primary big" hidden>Ask the customer: is this the gate?</button>
     <article id="card" class="card">
       <label class="photo" for="photo-in">
         <img id="card-photo" alt="Door photo" hidden>
@@ -317,6 +326,26 @@
       <div class="row erow">
         <button id="s-cancel" class="btn ghost">Cancel</button>
         <button id="s-done" class="btn ghost">Destination reached · plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Door card: what to say to the customer, in their language; answers the rider can understand -->
+  <div id="asheet" class="vsheet" hidden>
+    <div class="vcard acard">
+      <div class="arow"><p class="vtitle">Say this to the customer</p><select id="ask-lang" aria-label="Customer's language"></select></div>
+      <p id="ask-note" class="meta"></p>
+      <ul id="ask-lines" class="alines"></ul>
+      <div class="listen">
+        <strong>Listen for</strong>
+        <p><span class="lbl yes">Yes</span><span id="ask-yes"></span></p>
+        <p><span class="lbl no">No</span><span id="ask-no"></span></p>
+        <p><span class="lbl">Numbers</span><span id="ask-nums"></span></p>
+        <p class="meta">If you hear "no" anywhere in the answer, take it as no. Numbers often come in English.</p>
+      </div>
+      <div class="row erow">
+        <button id="ask-photo" class="btn ghost">Send photo + question</button>
+        <button id="ask-close" class="btn primary">Done</button>
       </div>
     </div>
   </div>

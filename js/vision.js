@@ -1,4 +1,5 @@
 // Camera, signboard OCR (Tesseract.js, local files) and colour regions (left / centre / right).
+import { translit } from './native.js';
 
 const here = (p) => new URL(p, location.href).href;
 
@@ -40,12 +41,20 @@ export function cleanWords(text) {
   return text.toUpperCase().split(/[^A-Z0-9ऀ-෿]+/).filter((w) => w.length >= 2);
 }
 
-// -> { hit: 'name' | 'type' | null, word }
+// Names on half the shop signs in a city (Sri Lakshmi, Balaji, Venkateshwara…): reading one is not proof that this is
+// the place. Only a distinctive name counts as a check (✓); a common one only makes Pahunch ask.
+export const COMMON_NAMES = new Set('SRI SHRI SREE SHREE LAKSHMI LAXMI BALAJI VENKATESHWARA VENKATESWARA GANESH GANESHA GANAPATHI GANAPATI DURGA HANUMAN SAI KRISHNA RAMA RAM SHIVA SIVA MURUGAN AMMAN MAHALAKSHMI ANNAPOORNA ANNAPURNA NEW OLD GENERAL MEDICAL MEDICALS STORE STORES ENTERPRISES TRADERS AGENCIES CENTRE CENTER SHOP HOTEL'.split(' '));
+export const distinctive = (word) => !!word && word.length >= 4 && !COMMON_NAMES.has(word.toUpperCase());
+
+// -> { hit: 'name' | 'type' | null, word }   ('name' only for a distinctive name; a common one is a 'type'-level cue)
 export function matchSigns(words, verify) {
-  for (const want of verify.signs) { const w = words.find((s) => wordMatches(s, want)); if (w) return { hit: 'name', word: want }; }
+  const named = (want) => ({ hit: distinctive(want) ? 'name' : 'type', word: want });
+  // A sign read in Kannada / Tamil / Devanagari script is also compared in Latin letters ("ಮೆಡ್‌ಪ್ಲಸ್" ~ MEDPLUS).
+  words = [...words, ...words.filter((w) => /[\u0900-\u0dff]/.test(w)).map((w) => translit(w).toUpperCase())];
+  for (const want of verify.signs) { const w = words.find((s) => wordMatches(s, want)); if (w) return named(want); }
   // OCR often splits a sign ("MED PLUS"): also look in the words joined together.
   const joined = words.join('');
-  for (const want of verify.signs) if (want.length >= 4 && joined.includes(want)) return { hit: 'name', word: want };
+  for (const want of verify.signs) if (want.length >= 4 && joined.includes(want)) return named(want);
   for (const want of verify.alt) { const w = words.find((s) => wordMatches(s, want)); if (w) return { hit: 'type', word: want }; }
   return { hit: null, word: null };
 }

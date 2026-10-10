@@ -5,7 +5,7 @@
 // { floor, lang, parser:'rules', steps:[{ n, kind:'pass'|'turn'|'arrive', landmark?, turn?, ordinal?, road?,
 //   ref?:{relation, landmark}, verify:{ signs, alt, colour, compass, confidence } }] }
 
-import { normaliseNative } from './native.js';
+import { normaliseNative, translit } from './native.js';
 
 const W = (s) => s.split(/\s+/).filter(Boolean);
 const set = (...lists) => new Set(lists.flatMap(W));
@@ -272,6 +272,12 @@ export function unknownWords(note, graph = parseRules(note)) {
   return tokens(normalise(note || '')).map((t) => t.w.replace(/[.,;!?।]+/g, '')).filter(Boolean).filter((w) => !(joiners.has(w) || routeWord(w) || VERBS.has(w) || STOP.has(w) || WALA.has(w) ||
     HONORIFIC.has(w) || ANAPHORA.has(w) || hint(w) || names.has(w) || /^d/.test(w) || ['ah', 'a', 'la', 'le', 'na'].includes(w)));
 }
+// Parts of the note the plan didn't use ("near the house with the dogs", "where the road dips"): shown to the
+// rider in the customer's own words, never silently dropped. Pieces with no route content and only filler are skipped.
+export function leftovers(note) {
+  return (note || '').split(/[.,;!?\n।]+/).map((p) => p.trim()).filter((p) => p && unknownWords(p).length > 0);
+}
+
 // Shop-like types are easily swapped when translating ("medicine shop" / "pharmacy"): one family.
 const FAMILY = { pharmacy: 'shop', store: 'shop', bakery: 'shop', restaurant: 'shop', hospital: 'care', school: 'edu', college: 'edu', gate: 'gate', door: 'gate', house: 'home', apartment: 'home' };
 export function typeOrFamilySaid(note, type) {
@@ -347,6 +353,8 @@ export function verifyFor(step) {
   if (step.kind === 'turn') return { signs: [], alt: [], colour: null, objects: [], compass: step.turn, confidence: 'medium' };
   const target = lm?.name ? lm : step.ref?.landmark?.name ? step.ref.landmark : lm;
   const signs = target?.name ? W(target.name.toUpperCase().replace(/[^\p{L}\p{M}\d ]/gu, ' ')).filter((w) => w.length >= 3) : [];
+  // A name said in Tamil / Hindi / Kannada… is also looked for in Latin letters (most signboards carry English).
+  if (target?.name && /[\u0900-\u0dff]/.test(target.name)) for (const w of W(translit(target.name).toUpperCase())) if (w.length >= 3 && !signs.includes(w)) signs.push(w);
   const alt = target ? W(LANDMARKS[target.type]?.[1] || '') : [];
   const colour = lm?.colour || null;
   const words = [...W((lm?.name || '').toLowerCase()), lm?.type === 'desk' ? 'table' : ''];
@@ -358,12 +366,17 @@ export function verifyFor(step) {
 export function parseRules(input) {
   const text = normalise(input);
   const graph = { floor: null, lang: detectLang(input), parser: 'rules', steps: [] };
-  const push = (s) => graph.steps.push(s);
+  // Each step remembers where in the customer's words it came from (0..1 through the note), so the app can
+  // play that moment of the voice note: every step traceable to what was actually said.
+  let at = 0, cursor = 0;
+  const push = (s) => graph.steps.push({ at, ...s });
 
   let turnClause = false; // the previous clause ended with a turn
   let pendingRef = null;  // "opposite the bus stop," waiting for the place it describes
   const clauses = text.split(SPLIT).filter((c) => c && c.trim()).flatMap((c) => c.split(TURN_SPLIT));
   for (const clause of clauses.filter((c) => c && c.trim())) {
+    const pos = text.indexOf(clause.trim(), cursor);
+    if (pos >= 0) { at = text.length ? pos / text.length : 0; cursor = pos + clause.trim().length; }
     const a = analyse(clause);
     if (a.floor !== undefined) graph.floor = a.floor;
     const lms = a.landmarks;
@@ -385,7 +398,7 @@ export function parseRules(input) {
     turnClause = false;
     if (!lms.length) continue;
     if (afterTurn && lms.length === 1 && !a.rel && ['at', 'after', 'past', 'by', 'from'].includes(a.toks[0]?.w)) {
-      graph.steps.splice(graph.steps.length - 1, 0, { kind: 'pass', landmark: landmarkOut(lms[0]) });
+      graph.steps.splice(graph.steps.length - 1, 0, { at, kind: 'pass', landmark: landmarkOut(lms[0]) });
       continue;
     }
     const prev = graph.steps.at(-1);

@@ -57,8 +57,9 @@ WMODEL=${WHISPER_MODEL:-$(pick models/whisper/ggml-large-v3-turbo-q5_0.bin model
 LIVEMODEL=$(pick models/whisper/ggml-base.bin)
 if [ -x "$WHISPER_BIN" ] && [ -n "$WMODEL" ]; then
   pkill -f whisper-server 2>/dev/null
-  # Final pass: 6 threads, 15 s audio window (-ac 768 instead of the default 30 s), flash attention, greedy decoding.
-  "$WHISPER_BIN" -m "$WMODEL" --host 127.0.0.1 --port 8082 -l auto -t 6 -ac 768 -fa -nt -bs 1 > whisper.log 2>&1 &
+  # Final pass: 6 threads, 15 s audio window (-ac 768 instead of the default 30 s), flash attention, greedy decoding,
+  # with timestamps (voice-note steps play back the moment they came from).
+  "$WHISPER_BIN" -m "$WMODEL" --host 127.0.0.1 --port 8082 -l auto -t 6 -ac 768 -fa -bs 1 > whisper.log 2>&1 &
   WHISPER=$!
   echo "On-device speech ($WMODEL) starting (pid $WHISPER, log: whisper.log)"
   # Live transcript: a lighter model on its own port so it never delays the final pass.

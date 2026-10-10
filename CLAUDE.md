@@ -9,7 +9,7 @@ Phase 1 prototype: never copy from it).
 
 ## Hard rules
 - **Commits show only Hanniel.** No `Co-Authored-By: Claude`, no "Generated with Claude" lines.
-- Commit + push after every working change. Run all eight test files first (below); they must pass.
+- Commit + push after every working change. Run all nine test files first (below); they must pass.
 - Never claim the NPU or the Q3 chip runs a model. Truth: llama.cpp / whisper.cpp run on the CPU in Termux; vision
   runs on the Adreno GPU via MediaPipe. The OpenCL (GPU) llama.cpp build segfaults on this phone (GPU off by default).
 - Don't break the working demo. Safe tags: `cp1-safe`, `cp2-safe`. Feature freeze Sat 17:30 for Checkpoint 2 (19:00).
@@ -41,7 +41,7 @@ Phase 1 prototype: never copy from it).
 
 ## Measured (on the phone)
 - `node tools/eval-llm.mjs`: Gemma 3n E2B rewriter **7/7 at 5.0 s/route** (Qwen3-1.7B 4/7 at 3.8 s; old approaches 1/7–3/7).
-- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs && node tests/languages.test.mjs && node tests/heldout.test.mjs && node tests/vision.test.mjs`
+- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs && node tests/languages.test.mjs && node tests/heldout.test.mjs && node tests/vision.test.mjs && node tests/trust.test.mjs`
 - Voice: `node tools/eval-voice.mjs` scores recordings in tests/voice/ (needs whisper-server + ffmpeg).
 
 ## Not directions / chat input (Sat 18:15)
@@ -65,3 +65,10 @@ tests/heldout.test.mjs: 30 routes written after tuning: 23/30 on first run (2 of
 Offline voice: Chrome on-device speech (SpeechRecognition.available/install with processLocally) for downloaded
 languages, else Whisper (tools/get-whisper.sh turbo -> large-v3-turbo, picked first by start.sh). Icons: tools/make-icons.mjs.
 Developer tools hidden: tap the logo 5x (or ?dev). Door card: live fix, else last fix + steps (approx.), upgrades later.
+
+## Final idea (Sat late night): the language bridge for the last 100 metres
+Voice note -> steps in the rider's language (stepText, fixed phrases) with ▶ hear-it clips (Whisper verbose_json timings,
+parser step.at) and "Customer also said" (parser leftovers); ✓ only for distinctive sign names (vision COMMON_NAMES),
+cross-script via native.js translit; honest arrival (state.arriveBy); door card js/askcard.js (30 phrases, yes/no or
+numbers, CHECKED set empty until a native speaker checks). 108 removed from roles and partner demo. Pitch docs:
+../FINAL_PITCH.md, ../PROJECT_BRIEF.md.
