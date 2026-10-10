@@ -4,7 +4,7 @@ import { parseNote, warmNative, complete, agrees, translateLine } from './llm.js
 import { Vision, matchSigns, ocrLangs } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
-import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
+import { say as speakAloud, text, buzz, Compass, unlockSpeech, localName, BUZZ } from './guide.js';
 import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
@@ -29,9 +29,29 @@ sensors.start();
 const MODES = {
   delivery: { badge: 'Delivery', title: 'Where to?', sub: 'Speak or paste the directions exactly as the customer gave them.' },
   ambulance: { badge: 'Ambulance', title: 'Emergency call', sub: 'Type or speak what the caller said. Pahunch guides without stopping to ask.' },
+  silent: { badge: 'Silent', title: 'Where to?', sub: 'Silent mode: every instruction is shown big and felt as vibration. Nothing needs to be heard.' },
   ride: { badge: 'Pickup', title: 'Find your passenger', sub: 'Paste where they said they are waiting: "opposite the bus stop, blue shirt".' },
 };
 const ambulance = () => document.body.dataset.mode === 'ambulance';
+const silent = () => document.body.dataset.mode === 'silent';
+
+// Every spoken line goes through here: in Silent mode it becomes a big on-screen card + flash + buzz instead.
+function say(line, lang = 'en') {
+  say.last = { line, lang };
+  if (silent()) return showCue(line);
+  speakAloud(line, lang);
+}
+let cueTimer;
+function showCue(line) {
+  const c = $('#cue');
+  c.textContent = line;
+  c.hidden = false;
+  c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
+  document.body.classList.remove('flashing'); void document.body.offsetWidth; document.body.classList.add('flashing');
+  clearTimeout(cueTimer);
+  cueTimer = setTimeout(() => (c.hidden = true), 7000);
+}
+document.querySelectorAll('#haptic-legend [data-buzz]').forEach((b) => (b.onclick = () => navigator.vibrate?.(BUZZ[b.dataset.buzz])));
 
 // ---------- Router ----------
 const screens = ['roles', 'home', 'call', 'plan', 'guide', 'arrive'];

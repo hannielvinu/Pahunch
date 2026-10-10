@@ -53,6 +53,7 @@
       <symbol id="i-car" viewBox="0 0 24 24"><path d="M5 16v-4l2-5h10l2 5v4M3 16h18M7 12h10"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></symbol>
       <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></symbol>
       <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+      <symbol id="i-vibrate" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="2"/><path d="M4 8v8M2 10v4M20 8v8M22 10v4"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
       <symbol id="logo" viewBox="0 0 64 64">
         <rect width="64" height="64" rx="18" fill="url(#lg)"/>
@@ -85,6 +86,7 @@
     <p class="meta">Same engine, tuned for the job.</p>
     <button class="role" data-mode="delivery"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-scooter"/></svg></span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
     <button class="role" data-mode="ambulance"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-ambulance"/></svg></span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
+    <button class="role" data-mode="silent"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-vibrate"/></svg></span><span><strong>Deaf / hard-of-hearing rider</strong><em>Silent mode: everything is shown and felt; the customer's call becomes captions</em></span></button>
     <button class="role" data-mode="ride"><span class="ico"><svg class="i" aria-hidden="true"><use href="#i-car"/></svg></span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
   </section>
 
@@ -113,6 +115,15 @@
       <button id="kbd-plan" class="btn primary">Plan</button>
     </div>
     <p id="mic-status" class="meta" hidden></p>
+    <div id="haptic-legend" class="panel silent-only">
+      <strong>Vibration language</strong>
+      <div class="legend">
+        <button data-buzz="left">← Left · 2 taps</button><button data-buzz="right">→ Right · 3 taps</button>
+        <button data-buzz="spotted">✓ Landmark found · 1 tap</button><button data-buzz="ask">? Check this · 2 long</button>
+        <button data-buzz="arrived">⚑ Arrived · long-short-long</button>
+      </div>
+      <p class="meta">Tap a row to feel it.</p>
+    </div>
     <button id="callmode" class="callcard">
       <span class="ico"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></span>
       <span><strong>Customer on the phone? Call mode</strong><em>Put the call on speaker: live captions in your language, then the route</em></span>
@@ -315,6 +326,8 @@
       </div>
     </div>
   </div>
+
+  <div id="cue" class="cue" hidden aria-live="assertive"></div>
 
   <div id="net" class="net-chip" title="Requests to anything other than this phone, measured by the browser">On-device · 0 B sent</div>
   <div id="toast" class="toast" hidden></div>
