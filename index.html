@@ -3,64 +3,113 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f1115">
+  <meta name="theme-color" content="#0b0d12">
   <title>Pahunch</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/theme.css">
   <script src="lib/tesseract/tesseract.min.js" defer></script>
   <script src="lib/qrcode/qrcode.js" defer></script>
   <script src="js/app.js" type="module"></script>
 </head>
-<body>
-  <section id="home" class="screen">
-    <header class="brand">
-      <h1>Pahunch</h1>
-      <p>Maps get you to the lane. Pahunch gets you to the door.</p>
+<body data-mode="delivery">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--accent-2)"/></linearGradient>
+      <symbol id="logo" viewBox="0 0 64 64">
+        <path d="M32 4C19.3 4 9.5 13.6 9.5 26c0 15.7 22.5 34 22.5 34s22.5-18.3 22.5-34C54.5 13.6 44.7 4 32 4z" fill="url(#lg)"/>
+        <rect x="24" y="15" width="16" height="22" rx="2.5" fill="#0b0d12"/>
+        <circle cx="35.5" cy="27" r="1.8" style="fill:var(--accent)"/>
+        <path d="M20 42h24" stroke="#0b0d12" stroke-width="3" stroke-linecap="round" opacity=".35"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- Splash: warms up the on-device models while the logo animates -->
+  <section id="splash" class="splash">
+    <div class="splash-logo"><svg><use href="#logo"/></svg><span class="pulse"></span></div>
+    <h1 class="wordmark">Pahunch <span class="dev">पहुँच</span></h1>
+    <p class="tagline">Maps get you to the lane.<br>Pahunch gets you to the door.</p>
+    <ul id="boot" class="boot">
+      <li data-k="camera">Camera vision model</li>
+      <li data-k="ocr">Signboard reader</li>
+      <li data-k="llm">On-device language model</li>
+      <li data-k="sensors">Sensors · GPS · compass</li>
+    </ul>
+    <button id="boot-go" class="btn primary big" hidden>Continue</button>
+    <p class="meta foot">Runs on this phone · offline</p>
+  </section>
+
+  <!-- Who is using it -->
+  <section id="roles" class="screen roles" hidden>
+    <header class="topbar"><svg class="mark"><use href="#logo"/></svg><strong>Pahunch</strong></header>
+    <h2>Who's navigating?</h2>
+    <p class="meta">Same engine, tuned for the job.</p>
+    <button class="role" data-mode="delivery"><span class="ico">🛵</span><span><strong>Delivery rider</strong><em>Find the customer's exact door from their directions</em></span></button>
+    <button class="role" data-mode="ambulance"><span class="ico">🚑</span><span><strong>Ambulance · 108</strong><em>Emergency mode: no questions, torch at night, big prompts</em></span></button>
+    <button class="role" data-mode="ride"><span class="ico">🚖</span><span><strong>Ride pickup</strong><em>Find a passenger waiting "opposite the bus stop"</em></span></button>
+  </section>
+
+  <section id="home" class="screen" hidden>
+    <header class="topbar">
+      <svg class="mark"><use href="#logo"/></svg><strong>Pahunch</strong>
+      <button id="mode-badge" class="mode-badge" title="Change mode">Delivery</button>
     </header>
-    <label class="label" for="note">Directions, as the customer said them</label>
-    <textarea id="note" rows="6" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
+    <div class="hero">
+      <h2 id="home-title">Where to?</h2>
+      <p id="home-sub" class="meta">Speak or paste the directions exactly as the customer gave them.</p>
+    </div>
+    <div class="note-box">
+      <textarea id="note" rows="5" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
+      <button id="mic" class="mic" aria-label="Speak directions"><span>🎤</span></button>
+    </div>
+    <p id="mic-status" class="meta" hidden></p>
     <div class="row">
-      <button id="paste" class="btn ghost">Paste from laptop</button>
+      <button id="paste" class="btn ghost">📋 Paste from laptop</button>
       <div id="samples" class="chips" aria-label="Sample notes"></div>
     </div>
-    <div class="row">
-      <label class="label inline" for="voice">Voice</label>
-      <select id="voice">
-        <option value="auto">Auto (same as note)</option>
-        <option value="en">English</option>
-        <option value="hi">हिन्दी</option>
-        <option value="kn">ಕನ್ನಡ</option>
-        <option value="ta">தமிழ்</option>
-      </select>
-    </div>
-    <div class="row">
-      <label class="label inline" for="engine">Parser</label>
-      <select id="engine">
-        <option value="auto">Auto: on-device AI if running, else rules</option>
-        <option value="native">On-device AI · llama.cpp (Termux)</option>
-        <option value="browser">On-device AI · WebGPU (in Chrome)</option>
-        <option value="rules">Rule parser only (instant)</option>
-      </select>
-    </div>
-    <button id="parse" class="btn primary big">Plan route</button>
+    <button id="parse" class="btn primary big">Plan route →</button>
     <div id="thinking" class="thinking" hidden>
       <p id="thinking-status" class="meta"></p>
       <progress id="thinking-progress" max="1" hidden></progress>
       <pre id="thinking-out"></pre>
     </div>
-    <details id="doors" class="device" hidden>
+    <details id="doors" class="panel" hidden>
       <summary id="doors-sum">Saved doors</summary>
       <ul id="doors-list" class="doors"></ul>
     </details>
-    <details class="device">
-      <summary>Device check</summary>
+    <details id="sensors-panel" class="panel">
+      <summary>Live sensors</summary>
+      <pre id="sensors">starting…</pre>
+    </details>
+    <details class="panel">
+      <summary>Settings</summary>
+      <div class="row">
+        <label class="label inline" for="voice">Voice</label>
+        <select id="voice">
+          <option value="auto">Auto (same as note)</option>
+          <option value="en">English</option>
+          <option value="hi">हिन्दी</option>
+          <option value="kn">ಕನ್ನಡ</option>
+          <option value="ta">தமிழ்</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="label inline" for="engine">Parser</label>
+        <select id="engine">
+          <option value="auto">Auto: on-device AI + rules</option>
+          <option value="native">On-device AI · llama.cpp (Termux)</option>
+          <option value="browser">On-device AI · WebGPU (in Chrome)</option>
+          <option value="rules">Rule parser only (instant)</option>
+        </select>
+      </div>
       <pre id="device">checking…</pre>
     </details>
   </section>
 
   <section id="plan" class="screen" hidden>
-    <h2>Route plan</h2>
+    <header class="topbar"><button id="edit" class="back" aria-label="Back">←</button><strong>Route plan</strong></header>
     <p id="parsed-by" class="meta"></p>
     <div id="agree" class="agree" hidden>
       <span id="agree-text"></span>
@@ -68,12 +117,11 @@
     </div>
     <ol id="steps" class="steps"></ol>
     <p id="floor" class="meta big-meta"></p>
-    <details id="raw" class="device" hidden>
+    <details id="raw" class="panel" hidden>
       <summary>On-device model output</summary>
       <pre id="raw-out"></pre>
     </details>
     <div class="row end">
-      <button id="edit" class="btn ghost">Edit</button>
       <button id="start" class="btn primary big">Start guidance</button>
     </div>
   </section>
@@ -83,7 +131,11 @@
     <canvas id="overlay" class="overlay"></canvas>
     <div id="flash" class="flash"></div>
     <div class="hud top">
-      <div id="step-count" class="meta"></div>
+      <div class="hud-row">
+        <span id="step-count" class="pill"></span>
+        <span id="gps-chip" class="pill">GPS …</span>
+        <span id="walk-chip" class="pill">0 steps</span>
+      </div>
       <div id="step-line" class="step-now"></div>
       <div id="seen" class="seen"></div>
     </div>
@@ -94,12 +146,14 @@
         <button id="notyet" class="btn ghost big">Not yet</button>
         <button id="yes" class="btn primary big">Yes</button>
       </div>
+      <p class="meta center">Say "yes" / "haan" or tap</p>
     </div>
     <div class="hud bottom">
-      <div class="meta"><span id="ocr-ms"></span> · <span id="heading"></span></div>
+      <div class="meta stats"><span id="det-ms"></span><span id="ocr-ms"></span><span id="heading"></span></div>
       <div class="row">
-        <button id="stop" class="btn ghost">Stop</button>
-        <button id="skip" class="btn ghost">Skip step</button>
+        <button id="stop" class="btn ghost">✕</button>
+        <button id="handsfree" class="btn ghost" aria-pressed="false">🎤 Hands-free</button>
+        <button id="skip" class="btn ghost">Skip ›</button>
         <button id="turned" class="btn primary" hidden>I've turned</button>
       </div>
     </div>

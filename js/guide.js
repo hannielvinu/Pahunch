@@ -4,25 +4,25 @@ const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN' };
 
 const TEXT = {
   en: {
-    look: (x) => `Look for ${x}.`, spotted: (x) => `${x} spotted.`, ask: (x) => `Is this the ${x}?`,
+    look: (x) => `Look for the ${x}.`, spotted: (x) => `${x} detected.`, now: 'Now', ask: (x) => `Is this the ${x}?`,
     turn: (o, d) => `Take the ${['', 'first', 'second', 'third', 'fourth'][o] || o} turn on the ${d}.`,
     turned: 'Turn confirmed.', arrived: (f) => `You have arrived.${f != null ? ` Floor ${f}.` : ''}`,
     left: 'left', right: 'right', dest: 'destination',
   },
   hi: {
-    look: (x) => `${x} ढूंढिए।`, spotted: (x) => `${x} मिल गया।`, ask: (x) => `क्या यह ${x} है?`,
+    look: (x) => `${x} ढूंढिए।`, spotted: (x) => `${x} मिल गया।`, now: 'अब', ask: (x) => `क्या यह ${x} है?`,
     turn: (o, d) => `${['', 'पहली', 'दूसरी', 'तीसरी', 'चौथी'][o] || o} गली में ${d} मुड़िए।`,
     turned: 'मुड़ गए, बढ़िया।', arrived: (f) => `आप पहुँच गए।${f != null ? ` मंज़िल ${f}।` : ''}`,
     left: 'बाएं', right: 'दाएं', dest: 'मंज़िल',
   },
   kn: {
-    look: (x) => `${x} ನೋಡಿ.`, spotted: (x) => `${x} ಸಿಕ್ಕಿತು.`, ask: (x) => `ಇದು ${x} ಆ?`,
+    look: (x) => `${x} ನೋಡಿ.`, spotted: (x) => `${x} ಸಿಕ್ಕಿತು.`, now: 'ಈಗ', ask: (x) => `ಇದು ${x} ಆ?`,
     turn: (o, d) => `${['', 'ಮೊದಲ', 'ಎರಡನೇ', 'ಮೂರನೇ', 'ನಾಲ್ಕನೇ'][o] || o} ರಸ್ತೆಯಲ್ಲಿ ${d} ತಿರುಗಿ.`,
     turned: 'ತಿರುಗಿದ್ದೀರಿ.', arrived: (f) => `ನೀವು ತಲುಪಿದ್ದೀರಿ.${f != null ? ` ಮಹಡಿ ${f}.` : ''}`,
     left: 'ಎಡಕ್ಕೆ', right: 'ಬಲಕ್ಕೆ', dest: 'ಸ್ಥಳ',
   },
   ta: {
-    look: (x) => `${x} பாருங்கள்.`, spotted: (x) => `${x} கிடைத்தது.`, ask: (x) => `இது ${x} ஆ?`,
+    look: (x) => `${x} பாருங்கள்.`, spotted: (x) => `${x} கிடைத்தது.`, now: 'இப்போது', ask: (x) => `இது ${x} ஆ?`,
     turn: (o, d) => `${['', 'முதல்', 'இரண்டாவது', 'மூன்றாவது', 'நான்காவது'][o] || o} தெருவில் ${d} திரும்புங்கள்.`,
     turned: 'திரும்பிவிட்டீர்கள்.', arrived: (f) => `நீங்கள் வந்துவிட்டீர்கள்.${f != null ? ` மாடி ${f}.` : ''}`,
     left: 'இடது பக்கம்', right: 'வலது பக்கம்', dest: 'இடம்',
@@ -44,8 +44,21 @@ export function say(line, lang = 'en') {
   u.lang = VOICE_LANG[lang] || 'en-IN';
   u.voice = voices.find((v) => v.lang.replace('_', '-') === u.lang) || null;
   u.rate = 1;
-  speechSynthesis.cancel();
+  // Chrome on Android can drop an utterance queued right after cancel(); only cancel when something is playing.
+  if (speechSynthesis.speaking || speechSynthesis.pending) {
+    speechSynthesis.cancel();
+    setTimeout(() => speechSynthesis.speak(u), 120);
+  } else speechSynthesis.speak(u);
+  say.last = { line, lang };
+}
+
+// Call from a tap: Chrome only lets a page talk after the user has interacted with it.
+export function unlockSpeech() {
+  if (!('speechSynthesis' in globalThis) || unlockSpeech.done) return;
+  const u = new SpeechSynthesisUtterance(' ');
+  u.volume = 0;
   speechSynthesis.speak(u);
+  unlockSpeech.done = true;
 }
 
 // Distinct patterns a rider can feel without looking: left = 2 taps, right = 3 taps,

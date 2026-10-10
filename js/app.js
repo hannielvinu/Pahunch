@@ -3,7 +3,10 @@ import { parseNote, warmNative } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
-import { say, text, buzz, Compass, TurnDetector } from './guide.js';
+import { say, text, buzz, Compass, unlockSpeech } from './guide.js';
+import { Detector } from './detector.js';
+import { Sensors, GyroTurn } from './sensors.js';
+import { dictate, CommandListener, voiceAvailable } from './voice.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -16,9 +19,18 @@ const vision = new Vision($('#video'));
 const overlay = new Overlay($('#overlay'), $('#video'));
 const compass = new Compass();
 compass.start();
+const detector = new Detector($('#video'));
+const sensors = new Sensors();
+sensors.start();
+const MODES = {
+  delivery: { badge: '🛵 Delivery', title: 'Where to?', sub: 'Speak or paste the directions exactly as the customer gave them.' },
+  ambulance: { badge: '🚑 Ambulance', title: 'Emergency call', sub: 'Type or speak what the caller said. Pahunch guides without stopping to ask.' },
+  ride: { badge: '🚖 Pickup', title: 'Find your passenger', sub: 'Paste where they said they are waiting: "opposite the bus stop, blue shirt".' },
+};
+const ambulance = () => document.body.dataset.mode === 'ambulance';
 
 // ---------- Router ----------
-const screens = ['home', 'plan', 'guide', 'arrive'];
+const screens = ['roles', 'home', 'plan', 'guide', 'arrive'];
 function show(name) {
   for (const s of screens) $(`#${s}`).hidden = s !== name;
   if (name !== 'guide') stopGuide();
@@ -133,7 +145,7 @@ function renderPlan() {
 }
 
 $('#edit').onclick = () => show('home');
-$('#start').onclick = () => startGuide();
+$('#start').onclick = () => { unlockSpeech(); startGuide(); };
 
 // ---------- Guide ----------
 const step = () => state.graph.steps[state.i];
@@ -145,8 +157,11 @@ function spokenName(lm) {
   return [lm.colour, lm.name, lm.name && (lm.type === 'sign' || lm.type === 'gate') ? '' : type].filter(Boolean).join(' ');
 }
 
-function announce() {
+function announce(prefix = '') {
   const s = step();
+  state.stepAt = performance.now();
+  state.colourSeenAt = 0;
+  sensors.resetSteps();
   state.asking = false;
   state.signSeenAt = 0;
   $('#ask').hidden = true;
@@ -156,26 +171,29 @@ function announce() {
   $('#seen').replaceChildren();
   $('#colour-bars').hidden = !s.verify.colour;
   overlay.clearStep();
+  // One utterance: "MedPlus detected. Now take the second turn on the left."
+  const lead = prefix ? `${prefix} ${T().now} ` : ambulance() && s.n === 1 ? 'Emergency route. ' : '';
   if (s.kind === 'turn') {
-    say(T().turn(s.ordinal, T()[s.turn]), state.lang);
+    say(lead + T().turn(s.ordinal, T()[s.turn]), state.lang);
     buzz(s.turn);
-    state.turn = new TurnDetector(compass, s.turn, () => confirmStep(T().turned));
+    state.turn = new GyroTurn(sensors, compass, s.turn, () => confirmStep(T().turned));
     overlay.setTurn(state.turn);
   } else {
     state.turn = null;
-    say(T().look(spokenName(s.landmark)), state.lang);
+    const look = T().look(spokenName(s.landmark));
+    say(lead + (prefix ? look.charAt(0).toLowerCase() + look.slice(1) : look), state.lang);
   }
 }
 
 function confirmStep(line) {
   const s = step();
   if (s.kind === 'arrive') return arrive();
-  if (line) say(line, state.lang);
   if (s.kind === 'turn') overlay.turnDone = true;
   buzz('spotted');
   flash();
   state.i++;
-  setTimeout(announce, 1200); // let the confirmation finish before the next instruction
+  speechSynthesis?.cancel();
+  setTimeout(() => announce(line || ''), 700); // the confirmation and the next instruction are spoken together
 }
 
 function ask(target) {
@@ -210,24 +228,39 @@ function onOcr(res) {
   renderSeen(res.words, m.word);
   if (state.asking || !m.hit) return;
   if (s.kind === 'pass') {
-    if (m.hit === 'name') confirmStep(T().spotted(spokenName(s.landmark)));
+    // A named signboard is strong evidence: confirm. A generic word ("TEMPLE") asks, except in ambulance mode.
+    if (m.hit === 'name' || ambulance()) confirmStep(T().spotted(spokenName(s.landmark)));
     else ask(spokenName(s.landmark));
     return;
   }
-  // Arrive: the named sign (often the reference, e.g. MedPlus) narrows it down; colour or a direct name match triggers the question.
   state.signSeenAt = performance.now();
-  if (!s.verify.colour || s.landmark?.name) ask(spokenName(s.landmark));
+  state.signHit = m.hit;
+  decideArrive();
+}
+
+// Arrive when the evidence agrees (sign + colour, or the destination's own name); ask only on a single weak cue.
+function decideArrive() {
+  const s = step();
+  if (!s || s.kind !== 'arrive' || state.asking) return;
+  const now = performance.now();
+  const sign = now - (state.signSeenAt || 0) < 10000, colour = now - (state.colourSeenAt || 0) < 4000;
+  const needColour = !!s.verify.colour, needSign = s.verify.signs.length > 0;
+  const ownName = sign && state.signHit === 'name' && s.landmark?.name;
+  if (ownName || (sign && (!needColour || colour)) || (colour && !needSign)) return confirmStep();
+  const firstCue = Math.min(...[state.signSeenAt, state.colourSeenAt].filter(Boolean));
+  if ((sign || colour) && now - firstCue > (ambulance() ? 2000 : 4000)) {
+    if (ambulance()) return confirmStep();
+    ask(spokenName(s.landmark));
+  }
 }
 
 function onColour(thirds, colour) {
   overlay.setColour(colour, thirds);
   const bars = $('#colour-bars').children;
-  thirds.forEach((v, k) => { bars[k].style.setProperty('--fill', `${Math.min(100, Math.round(v * 250))}%`); bars[k].classList.toggle('on', v >= 0.15); });
-  const s = step();
-  if (s.kind !== 'arrive' || state.asking) return;
-  const best = Math.max(...thirds);
-  const signRecent = performance.now() - state.signSeenAt < 10000;
-  if (best >= 0.15 && (!s.verify.signs.length || signRecent || best >= 0.35)) ask(spokenName(s.landmark));
+  thirds.forEach((v, k) => { bars[k].style.setProperty('--fill', `${Math.min(100, Math.round(v * 250))}%`); bars[k].classList.toggle('on', v >= 0.08); });
+  if (Math.max(...thirds) >= 0.08) { state.colourSeenAt ||= performance.now(); state.colourLast = performance.now(); }
+  else if (performance.now() - (state.colourLast || 0) > 1500) state.colourSeenAt = 0;
+  decideArrive();
 }
 
 async function ocrLoop() {
@@ -241,10 +274,34 @@ function tick() {
   if (!state.running) return;
   state.turn?.tick();
   const d = state.turn?.delta;
-  $('#heading').textContent = compass.heading == null ? 'compass: no sensor' : `heading ${Math.round(compass.heading)}°${d != null ? ` · turned ${Math.round(d)}°` : ''}`;
+  $('#heading').textContent = `${compass.heading == null ? 'compass –' : `heading ${Math.round(compass.heading)}°`}${d != null ? ` · turned ${Math.round(d)}°` : ''}`;
   const c = step()?.verify.colour;
-  if (c) { const t = vision.colour(c); if (t) onColour(t, c); }
-  state.raf = setTimeout(tick, 200);
+  const scan = vision.scan(c || 'blue');
+  if (scan) {
+    state.brightness = scan.brightness;
+    if (c) { overlay.setMask(scan.mask, c); onColour(scan.thirds, c); } else overlay.setMask(null);
+    // Dark lane: switch the torch on (always allowed in ambulance mode).
+    if (scan.brightness < 0.16 || (ambulance() && scan.brightness < 0.25)) vision.setTorch(true);
+    else if (scan.brightness > 0.4) vision.setTorch(false);
+  }
+  const p = sensors.pos;
+  const gps = $('#gps-chip');
+  gps.textContent = p ? `GPS ±${p.acc} m` : `GPS: ${sensors.gpsError || 'searching'}`;
+  gps.className = `pill ${p && p.acc < 50 ? 'good' : p ? '' : 'bad'}`;
+  $('#walk-chip').textContent = `${sensors.steps} steps · ~${Math.round(sensors.steps * 0.7)} m`;
+  state.raf = setTimeout(tick, 150);
+}
+
+// Object detection on the live camera (MediaPipe), throttled so OCR keeps its share of the phone.
+function detectLoop() {
+  if (!state.running) return;
+  const t0 = performance.now();
+  try {
+    const dets = detector.detect();
+    overlay.setDetections(dets);
+    if (detector.ready) $('#det-ms').textContent = `vision ${detector.ms} ms · ${detector.delegate}`;
+  } catch (e) { console.warn(e); }
+  state.detTimer = setTimeout(detectLoop, Math.max(60, 140 - (performance.now() - t0)));
 }
 
 async function startGuide() {
@@ -266,12 +323,19 @@ async function startGuide() {
   announce();
   ocrLoop();
   tick();
+  if (!detector.ready) detector.load().then(detectLoop).catch((e) => ($('#det-ms').textContent = `vision off: ${e.message}`));
+  else detectLoop();
+  if (ambulance()) navigator.vibrate?.([200, 100, 200, 100, 200]);
 }
 
 function stopGuide() {
   if (!state.running) return;
   state.running = false;
   clearTimeout(state.raf);
+  clearTimeout(state.detTimer);
+  listener.stop();
+  $('#handsfree').setAttribute('aria-pressed', 'false');
+  vision.setTorch(false);
   overlay.stop();
   vision.stopCamera();
   state.wake?.release?.();
@@ -346,7 +410,8 @@ function renderQr(data) {
 async function fixPosition(card) {
   state.locating = true;
   renderCard();
-  const pos = await locate();
+  const live = sensors.pos && Date.now() - sensors.pos.at < 60000 ? { latitude: sensors.pos.lat, longitude: sensors.pos.lon, accuracy: sensors.pos.acc } : null;
+  const pos = live || (await locate());
   state.locating = false;
   if (pos) { setPosition(card, pos); if (loadCards().some((c) => c.id === card.id)) saveCard(card); }
   else toast('No GPS fix. Step outside and tap Retry GPS.');
@@ -414,8 +479,79 @@ startNetMeter(({ requests, bytes }) => {
   chip.textContent = requests ? `⚠ ${requests} off-device request${requests > 1 ? 's' : ''} · ${formatBytes(bytes)}` : 'On-device · 0 B sent';
 });
 deviceReport().then((r) => { state.device = r; $('#device').textContent = describeDevice(r); });
-warmNative();
 renderDoors();
 
+// ---------- Hands-free answers ----------
+const listener = new CommandListener((cmd) => {
+  if (cmd === 'yes' && state.asking) $('#yes').click();
+  else if (cmd === 'no' && state.asking) $('#notyet').click();
+  else if (cmd === 'skip') $('#skip').click();
+  else if (cmd === 'repeat' && say.last) say(say.last.line, say.last.lang);
+  else if (cmd === 'stop') $('#stop').click();
+}, (heard) => toast(`🎤 "${heard}"`));
+$('#handsfree').onclick = () => {
+  const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
+  if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }
+  if (!voiceAvailable) return toast('Voice commands need Chrome speech recognition.');
+  listener.start(state.lang);
+  $('#handsfree').setAttribute('aria-pressed', 'true');
+  toast('Listening: say "yes", "haan", "skip" or "repeat".');
+};
+
+// ---------- Dictate directions ----------
+$('#mic').onclick = async () => {
+  unlockSpeech();
+  const btn = $('#mic'), status = $('#mic-status');
+  if (btn.classList.contains('live')) { dictate.stop?.(); return; }
+  const lang = $('#voice').value === 'auto' ? 'en' : $('#voice').value;
+  btn.classList.add('live');
+  status.hidden = false;
+  status.textContent = 'Listening… speak the directions';
+  try {
+    const textOut = await dictate(lang, (p) => { $('#note').value = p; });
+    if (textOut) { $('#note').value = textOut; status.textContent = '✓ Got it. Tap Plan route.'; } else status.textContent = 'Didn’t catch that. Try again.';
+  } catch (e) { status.textContent = `Voice: ${e.message}. Type or paste instead.`; }
+  btn.classList.remove('live');
+};
+
+// ---------- Modes ----------
+function setMode(mode) {
+  const m = MODES[mode] ? mode : 'delivery';
+  document.body.dataset.mode = m;
+  try { localStorage.setItem('pahunch.mode', m); } catch {}
+  $('#mode-badge').textContent = MODES[m].badge;
+  $('#home-title').textContent = MODES[m].title;
+  $('#home-sub').textContent = MODES[m].sub;
+}
+document.querySelectorAll('.role').forEach((b) => (b.onclick = () => { setMode(b.dataset.mode); show('home'); }));
+$('#mode-badge').onclick = () => show('roles');
+
+// ---------- Live sensors panel ----------
+setInterval(() => {
+  if ($('#home').hidden || !$('#sensors-panel').open) return;
+  $('#sensors').textContent = sensors.report({ heading: compass.heading, brightness: state.brightness });
+}, 400);
+
+// ---------- Splash: warm up models, then continue ----------
+async function boot() {
+  const mark = (k, ok, note) => { const li = document.querySelector(`#boot [data-k="${k}"]`); li.classList.add(ok ? 'ok' : 'skip'); if (note) li.insertAdjacentHTML('beforeend', `<em>${note}</em>`); };
+  const t0 = performance.now();
+  const jobs = [
+    detector.load().then(() => mark('camera', true, `EfficientDet · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
+    new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · 4 languages'), () => mark('ocr', false, 'failed')),
+    warmNative().then((up) => mark('llm', up, up ? 'Qwen2.5 · llama.cpp' : 'rules only (start.sh)')),
+    new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
+  ];
+  await Promise.race([Promise.allSettled(jobs), new Promise((r) => setTimeout(r, 9000))]);
+  await new Promise((r) => setTimeout(r, Math.max(0, 1600 - (performance.now() - t0))));
+  let saved = null;
+  try { saved = localStorage.getItem('pahunch.mode'); } catch {}
+  setMode(saved || 'delivery');
+  show(saved ? 'home' : 'roles');
+  $('#splash').classList.add('out');
+  setTimeout(() => ($('#splash').hidden = true), 450);
+}
+
 if ('serviceWorker' in navigator && !location.search.includes('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
-show('home');
+for (const s of screens) $(`#${s}`).hidden = true;
+boot();

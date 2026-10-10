@@ -59,6 +59,25 @@ const COLOUR_TEST = {
   grey: (h, s, v) => s < 0.12 && v >= 0.3 && v <= 0.75,
 };
 
+// Pixel mask of `colour` (for the live overlay), its share per third, and mean brightness (low light → torch).
+export function colourScan(imageData, colour) {
+  const test = COLOUR_TEST[colour];
+  const { data, width, height } = imageData;
+  const mask = new ImageData(width, height);
+  const hits = [0, 0, 0], totals = [0, 0, 0];
+  let light = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const k = (y * width + x) * 4, third = Math.min(2, Math.floor((x * 3) / width));
+      const [h, s, v] = hsv(data[k], data[k + 1], data[k + 2]);
+      light += v;
+      totals[third]++;
+      if (test && test(h, s, v)) { hits[third]++; mask.data[k + 3] = 255; }
+    }
+  }
+  return { thirds: hits.map((n, i) => n / totals[i]), mask, brightness: light / (width * height) };
+}
+
 // Share of pixels of `colour` in the left, centre and right thirds of the frame (0..1 each).
 export function colourThirds(imageData, colour) {
   const test = COLOUR_TEST[colour];
@@ -101,8 +120,16 @@ export class Vision {
     this.stream = null;
   }
 
-  async loadOcr(langs = 'eng', onProgress) {
-    if (this.worker && this.langs === langs) return;
+  loadOcr(langs = 'eng', onProgress) {
+    // One load at a time: the splash and "Plan route" both ask for it.
+    if (this.worker && this.langs === langs) return Promise.resolve();
+    if (this._loading?.langs === langs) return this._loading.p;
+    const p = this._load(langs, onProgress).finally(() => { this._loading = null; });
+    this._loading = { langs, p };
+    return p;
+  }
+
+  async _load(langs, onProgress) {
     await this.worker?.terminate();
     const t0 = performance.now();
     this.worker = await Tesseract.createWorker(langs, 1, {
@@ -133,18 +160,45 @@ export class Vision {
     return ctx ? colourThirds(ctx.getImageData(0, 0, this.small.width, this.small.height), colour) : null;
   }
 
+  // Colour mask + thirds + brightness from a small frame (cheap enough for every tick).
+  scan(colour) {
+    const ctx = this.grab(this.small, 120);
+    return ctx ? colourScan(ctx.getImageData(0, 0, this.small.width, this.small.height), colour) : null;
+  }
+
+  // Phone torch for dark lanes, if the camera supports it.
+  async setTorch(on) {
+    const track = this.stream?.getVideoTracks()[0];
+    if (!track || !track.getCapabilities?.().torch || this.torch === on) return false;
+    try { await track.applyConstraints({ advanced: [{ torch: on }] }); this.torch = on; return true; } catch { return false; }
+  }
+
+  // Grayscale + contrast stretch: signboards read far better than from the raw colour frame.
+  enhance(ctx, W, H) {
+    const img = ctx.getImageData(0, 0, W, H), d = img.data;
+    let lo = 255, hi = 0;
+    for (let k = 0; k < d.length; k += 16) { const g = (d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10; if (g < lo) lo = g; if (g > hi) hi = g; }
+    const span = Math.max(40, hi - lo);
+    for (let k = 0; k < d.length; k += 4) {
+      const g = Math.max(0, Math.min(255, (((d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10 - lo) * 255) / span));
+      d[k] = d[k + 1] = d[k + 2] = g;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
   // Resolves with { words, boxes, text, ms } or null if the worker is still busy with the last frame.
   // boxes: [{ text, tokens, x, y, w, h }] with x/y/w/h as fractions of the camera frame (0..1).
   async read() {
     if (!this.worker || this.ocrBusy) return null;
-    const ctx = this.grab(this.big, 1024);
+    const ctx = this.grab(this.big, 1280);
     if (!ctx) return null;
+    this.enhance(ctx, this.big.width, this.big.height);
     this.ocrBusy = true;
     const t0 = performance.now();
     try {
       const { data } = await this.worker.recognize(this.big);
       const W = this.big.width, H = this.big.height;
-      const read = (data.words || []).filter((w) => w.confidence > 45);
+      const read = (data.words || []).filter((w) => w.confidence > 35 && /[A-Za-z0-9ऀ-෿]{2,}/.test(w.text));
       const boxes = [];
       for (const w of read) {
         const tokens = cleanWords(w.text), b = w.bbox;

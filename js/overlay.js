@@ -2,7 +2,7 @@
 // OCR boxes (green = your landmark, red = decoy), the turn arrow with its compass arc, and colour thirds.
 import { wordMatches } from './vision.js';
 
-const GREEN = '#2ecc71', RED = '#ff4d4d', AMBER = '#ffb020';
+const GREEN = '#2ecc71', RED = '#ff4d4d', AMBER = '#ffb020', CYAN = '#22d3ee';
 const PAINT = { red: '#ff3b30', orange: '#ff9500', yellow: '#ffd60a', green: '#30d158', blue: '#2f8bff', pink: '#ff5fa2',
   brown: '#a2733f', white: '#ffffff', black: '#111111', grey: '#9a9a9a' };
 const THIRDS = ['left', 'centre', 'right'];
@@ -33,6 +33,27 @@ export class Overlay {
     this.boxesAt = 0;
     this.hitLabel = '';
     this.running = false;
+    this.dets = [];
+    this.mask = null;
+    this.maskCanvas = document.createElement('canvas');
+    this.scanning = true;
+  }
+
+  // Object detections from detector.js: [{ label, score, x, y, w, h }] (fractions of the frame).
+  setDetections(dets) { this.dets = dets || []; this.detsAt = performance.now(); }
+
+  // Pixel mask of the target colour (ImageData, alpha = hit), drawn tinted over the video.
+  setMask(mask, name) {
+    if (!mask) { this.mask = null; return; }
+    const c = this.maskCanvas;
+    c.width = mask.width; c.height = mask.height;
+    const g = c.getContext('2d');
+    g.putImageData(mask, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = PAINT[name] || AMBER;
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'source-over';
+    this.mask = { name, at: performance.now() };
   }
 
   start() {
@@ -94,9 +115,61 @@ export class Overlay {
     const v = this.video;
     if (!v.videoWidth) return;
     const m = coverMap(v.videoWidth, v.videoHeight, W, H);
+    if (this.mask && now - this.mask.at < 800) this.drawMask(ctx, m);
     if (this.colour && now - this.colour.at < 1000) this.drawColour(ctx, m, W, H);
+    this.drawDetections(ctx, m, now);
+    if (!this.turn) this.drawReticle(ctx, W, H, now);
     this.drawBoxes(ctx, m, now);
     if (this.turn) this.drawTurn(ctx, W, H, now);
+  }
+
+  drawMask(ctx, m) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.imageSmoothingEnabled = false; // blocky mask reads as "pixels the phone classified"
+    ctx.drawImage(this.maskCanvas, m.ox, m.oy, m.dw, m.dh);
+    ctx.restore();
+  }
+
+  // Corner-bracket boxes with class + confidence, like a CV demo; fades if detection stalls.
+  drawDetections(ctx, m, now) {
+    if (!this.dets.length || now - (this.detsAt || 0) > 1200) return;
+    ctx.save();
+    ctx.lineWidth = 3;
+    for (const d of this.dets) {
+      const r = toScreen(d, m), c = Math.min(22, r.w / 4, r.h / 4);
+      ctx.strokeStyle = CYAN;
+      ctx.shadowColor = CYAN; ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (const [x, y, dx, dy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
+        ctx.moveTo(x + dx * c, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * c);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.08; ctx.fillStyle = CYAN; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.globalAlpha = 1;
+      label(ctx, `${d.label} ${Math.round(d.score * 100)}%`, r.x, r.y - 4, CYAN, '#012', 'bold 13px Inter, system-ui, sans-serif');
+    }
+    ctx.restore();
+  }
+
+  // Centre reticle with a sweeping scan line: shows the camera is actively reading.
+  drawReticle(ctx, W, H, now) {
+    const w = W * 0.72, h = H * 0.34, x = (W - w) / 2, y = H * 0.3, c = 26;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (const [px, py, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+      ctx.moveTo(px + dx * c, py); ctx.lineTo(px, py); ctx.lineTo(px, py + dy * c);
+    }
+    ctx.stroke();
+    if (this.scanning) {
+      const sy = y + ((now / 1600) % 1) * h;
+      const g = ctx.createLinearGradient(0, sy - 18, 0, sy + 2);
+      g.addColorStop(0, 'rgba(34,211,238,0)'); g.addColorStop(1, 'rgba(34,211,238,.55)');
+      ctx.fillStyle = g; ctx.fillRect(x, sy - 18, w, 20);
+      ctx.fillStyle = CYAN; ctx.fillRect(x, sy, w, 2);
+    }
+    ctx.restore();
   }
 
   // Tint each third of the frame where the target colour shows up, labelled e.g. "blue · left".
@@ -114,7 +187,7 @@ export class Overlay {
       ctx.lineWidth = 3; ctx.strokeStyle = paint;
       ctx.strokeRect(x0 + 1.5, 1.5, x1 - x0 - 3, H - 3);
       const dark = name === 'white' || name === 'yellow';
-      label(ctx, `${name} · ${THIRDS[k]}`, x0 + 8, H * 0.5 - 22, paint, dark ? '#111' : '#fff', 'bold 16px system-ui, sans-serif');
+      label(ctx, `${name} · ${THIRDS[k]}`, x0 + 8, H * 0.5 - 22, paint, dark ? '#111' : '#fff', 'bold 16px Inter, system-ui, sans-serif');
     });
     ctx.restore();
   }
@@ -174,12 +247,12 @@ export class Overlay {
         ctx.shadowBlur = 16;
         ctx.strokeRect(r.x - 4, r.y - 4, r.w + 8, r.h + 8);
         ctx.shadowBlur = 0;
-        label(ctx, this.hitLabel, r.x - 4, r.y - 8, GREEN, '#031', 'bold 18px system-ui, sans-serif');
+        label(ctx, this.hitLabel, r.x - 4, r.y - 8, GREEN, '#031', 'bold 18px Inter, system-ui, sans-serif');
       } else {
         ctx.lineWidth = 2;
         ctx.strokeStyle = RED;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
-        if (r.h >= 12 && redLabels++ < 5) label(ctx, '✗ not your landmark', r.x, r.y - 3, RED, '#fff', '12px system-ui, sans-serif');
+        if (r.h >= 12 && redLabels++ < 5) label(ctx, '✗ not your landmark', r.x, r.y - 3, RED, '#fff', '12px Inter, system-ui, sans-serif');
       }
     }
     ctx.restore();
