@@ -1,6 +1,6 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords } from './parser.js';
-import { parseNote, warmNative, complete } from './llm.js';
+import { parseNote, warmNative, complete, agrees } from './llm.js';
 import { Vision, matchSigns, ocrLangs } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
@@ -111,7 +111,20 @@ $('#parse').onclick = async () => {
   state.lang = pick === 'auto' ? state.spokenLang || state.graph.lang : pick; // reply in the language that was spoken
   renderPlan();
   show('plan');
+  if (res.sure) crossCheck(note, state.graph);
 };
+
+// The rules read every word, so their plan is shown at once; the on-device model (Gemma 3n) still reads the
+// same words in the background and says whether it agrees: a second, independent reading on the phone.
+async function crossCheck(note, g) {
+  const r = await parseNote(note, { mode: 'native' }).catch(() => null);
+  if (!r?.stats || !r.llmGraph || state.graph !== g || $('#plan').hidden) return;
+  state.inferences.push({ at: Date.now(), ...r.stats });
+  state.parse.stats = r.stats;
+  const same = agrees(r.llmGraph, g);
+  $('#parsed-by').textContent += `
+On-device AI cross-check (${r.stats.model.replace(/.gguf$/, '')}, ${(r.stats.ms / 1000).toFixed(1)} s): ${same ? 'same route ✓' : 'reads it a little differently, check the steps'}`;
+}
 
 $('#use-other').onclick = () => {
   const p = state.parse;
