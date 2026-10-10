@@ -338,7 +338,13 @@ function announce(prefix = '') {
   $('#ask').hidden = true;
   $('#turned').hidden = s.kind !== 'turn';
   $('#step-count').textContent = `Step ${s.n} of ${state.graph.steps.length}`;
-  $('#step-line').textContent = describe(s);
+  const rl = state.lang && state.lang !== 'en';
+  $('#step-line').textContent = rl ? stepText(s, state.lang) : describe(s);
+  $('#step-en').textContent = rl ? describe(s) : '';
+  const nx = state.graph.steps[state.i + 1];
+  $('#step-next').textContent = nx ? `Next: ${rl ? stepText(nx, state.lang) : describe(nx)}` : '';
+  $('#dots').replaceChildren(...state.graph.steps.map((_, k) => el('i', k < state.i ? 'done' : k === state.i ? 'now' : '')));
+  $('#her-voice').hidden = !state.vnote?.segments?.length;
   $('#seen').replaceChildren();
   $('#colour-bars').hidden = !s.verify.colour;
   overlay.clearStep();
@@ -350,7 +356,7 @@ function announce(prefix = '') {
     const inst = T().turn(s.ordinal, T()[s.turn]);
     say(lead + (prefix ? inst.charAt(0).toLowerCase() + inst.slice(1) : inst), state.lang);
     buzz(s.turn);
-    state.turn = new GyroTurn(sensors, compass, s.turn, () => confirmStep(T().turned));
+    state.turn = new GyroTurn(sensors, compass, s.turn, () => { state.lastHow = 'cue'; confirmStep(T().turned); });
     overlay.setTurn(state.turn);
   } else {
     state.turn = null;
@@ -361,6 +367,8 @@ function announce(prefix = '') {
 
 function confirmStep(line) {
   const s = step();
+  (state.how ||= [])[state.i] = state.lastHow || 'rider';
+  state.lastHow = null;
   if (s.kind === 'arrive') return arrive();
   if (s.kind === 'turn') overlay.turnDone = true;
   buzz('spotted');
@@ -382,7 +390,7 @@ function ask(target) {
 $('#yes').onclick = () => {
   if (step()?.kind === 'arrive') state.arriveBy = 'rider'; $('#ask').hidden = true; state.asking = false; confirmStep(T().spotted(spokenName(step().landmark))); };
 $('#notyet').onclick = () => { $('#ask').hidden = true; state.asking = false; state.askCooldown = performance.now() + 4000; };
-$('#turned').onclick = () => confirmStep(T().turned);
+$('#turned').onclick = () => { state.lastHow = 'rider'; confirmStep(T().turned); };
 $('#skip').onclick = () => { if (step()?.kind === 'arrive') state.arriveBy = 'rider'; confirmStep(); };
 $('#stop').onclick = () => show('plan');
 
@@ -404,7 +412,7 @@ function onOcr(res) {
   if (state.asking || !m.hit) return;
   if (s.kind === 'pass') {
     // A named signboard is strong evidence: confirm. A generic word ("TEMPLE") asks, except in ambulance mode.
-    if (m.hit === 'name' || ambulance()) confirmStep(T().spotted(spokenName(s.landmark)));
+    if (m.hit === 'name' || ambulance()) { state.lastHow = m.hit === 'name' ? 'sign' : 'cue'; confirmStep(T().spotted(spokenName(s.landmark))); }
     else ask(spokenName(s.landmark));
     return;
   }
@@ -422,7 +430,7 @@ function decideArrive() {
   const needColour = !!s.verify.colour, needSign = s.verify.signs.length > 0;
   const ownName = sign && state.signHit === 'name' && s.landmark?.name;
   state.arriveBy = ownName ? 'own' : 'described';
-  if (ownName || (sign && (!needColour || colour)) || (colour && !needSign)) return confirmStep();
+  if (ownName || (sign && (!needColour || colour)) || (colour && !needSign)) { state.lastHow = ownName ? 'sign' : 'cue'; return confirmStep(); }
   const firstCue = Math.min(...[state.signSeenAt, state.colourSeenAt].filter(Boolean));
   if ((sign || colour) && now - firstCue > (ambulance() ? 2000 : 4000)) {
     if (ambulance()) return confirmStep();
@@ -489,7 +497,7 @@ function onDetections(dets) {
   state.objAt = now;
   const label = `seen: ${hit.label} · step ${s.n}`;
   if (state.objHits < 2 || state.asking) return { label: hit.label, text: label };
-  if (s.kind === 'pass') confirmStep(T().spotted(spokenName(s.landmark)));
+  if (s.kind === 'pass') { state.lastHow = 'cue'; confirmStep(T().spotted(spokenName(s.landmark))); }
   else { state.signSeenAt = now; state.signHit = s.verify.signs.length ? 'type' : 'name'; decideArrive(); }
   return { label: hit.label, text: label };
 }
@@ -528,8 +536,9 @@ function detectLoop() {
   state.detTimer = setTimeout(detectLoop, Math.max(60, 140 - (performance.now() - t0)));
 }
 
-async function startGuide() {
-  state.i = 0;
+async function startGuide(from = 0) {
+  state.i = from;
+  if (!from) state.how = [];
   state.arriveBy = null;
   state.startedAt = performance.now();
   show('guide');
@@ -579,6 +588,7 @@ function flash() {
 // ---------- Arrive ----------
 function arrive() {
   const g = state.graph;
+  if (state.order) postOrder(state.order.id, 'status', { status: 'arrived' });
   const secs = Math.round((performance.now() - state.startedAt) / 1000);
   say(T().arrived(g.floor), state.lang);
   buzz('arrived');
@@ -597,6 +607,9 @@ function showCard(card, fresh) {
   $('#arrive-sub').hidden = !fresh;
   $('#arrive-sub').textContent = own ? "The door's own sign was read." : 'Nothing here proves it is their door: check with the customer before handing over.';
   $('#arrive-ask').hidden = !fresh || own;
+  $('#arrive-yes').hidden = !fresh;
+  $('#done-summary').hidden = true;
+  $('#again').textContent = 'New route';
   $('#tick').hidden = !fresh || !own; // the big tick only when the door's own sign was read
   $('#del').hidden = fresh;
   renderCard();
@@ -1141,7 +1154,7 @@ setInterval(() => {
 // Customers already explain the way in a voice note (WhatsApp, the order chat). Pahunch takes that note as it is:
 // shared from WhatsApp, opened as a file, or handed over by a partner app, and transcribes it on this phone
 // (Whisper in Termux, no network). The words land in the box, editable, and the route is planned from them.
-async function openVoiceNote(blob, { name = 'voice note', from = '' } = {}) {
+async function openVoiceNote(blob, { name = 'voice note', from = '', lang = '' } = {}) {
   if (!blob || !blob.size) return toast('That voice note is empty.');
   show('home');
   const url = URL.createObjectURL(blob);
@@ -1159,7 +1172,7 @@ async function openVoiceNote(blob, { name = 'voice note', from = '' } = {}) {
   $('#thinking-out').textContent = '';
   $('#thinking-status').textContent = 'Listening to the voice note on this phone…';
   try {
-    const r = await transcribeNote(blob, { lang: speechLang, onProgress: (k, n) => ($('#thinking-status').textContent = n > 1 ? `Transcribing the voice note on this phone · part ${k} of ${n}…` : 'Transcribing the voice note on this phone…') });
+    const r = await transcribeNote(blob, { lang: lang || speechLang, onProgress: (k, n) => ($('#thinking-status').textContent = n > 1 ? `Transcribing the voice note on this phone · part ${k} of ${n}…` : 'Transcribing the voice note on this phone…') });
     box.hidden = true;
     if (!r.text) { status.textContent = 'No speech found in that voice note. Play it and type the directions.'; return; }
     $('#note').value = r.text;
@@ -1196,25 +1209,37 @@ $('#voice').onchange = () => { try { localStorage.setItem('pahunch.guideLang', $
 // ---------- Door card: say this to the customer ----------
 const askStep = () => (state.graph?.steps || []).at(-1);
 function custLang() {
-  const l = state.custLang || state.parse?.rules?.lang || state.graph?.lang || 'en';
+  const l = state.custLang || (state.order && (LANG_BASE[state.order.lang] || state.order.lang)) || state.parse?.rules?.lang || state.graph?.lang || 'en';
   return ASK[l] ? l : 'en';
 }
 function renderAsk() {
   const c = askCard(askStep(), custLang());
   $('#ask-note').textContent = `In ${c.name}, word for word. Names are kept as the customer said them.${c.checked ? ' Checked by a native speaker.' : ''}`;
-  $('#ask-lines').replaceChildren(...c.lines.map((l) => {
-    const li = el('li'), say1 = el('div', 'say');
+  const mine = askCard(askStep(), ASK[state.lang] ? state.lang : 'en');
+  $('#ask-lines').replaceChildren(...c.lines.map((l, k) => {
+    const li = el('li', l.key === state.lastQ ? 'on' : ''), say1 = el('div', 'say');
     say1.append(el('div', 'nat', l.native));
     if (l.roman !== l.native) say1.append(el('div', 'rom', l.roman));
+    // what it means, in the rider's own language
+    if (mine.lang !== c.lang && mine.lines[k]) say1.append(el('div', 'rom', `= ${mine.lines[k].native}`));
     const b = el('button', 'btn ghost spk', 'Speak');
-    b.onclick = () => speakAloud(l.native, c.lang);
+    b.onclick = () => { state.lastQ = l.key; speakAloud(l.native, c.lang); renderAsk(); };
+    li.onclick = (e) => { if (e.target === li || e.target.closest('.say')) { state.lastQ = l.key; renderAsk(); } };
     li.append(say1, b);
+    if (state.order) {
+      const send = el('button', 'btn primary send', 'Send');
+      send.onclick = () => sendQuestion(l);
+      li.append(send);
+    }
     return li;
   }));
   const words = (list) => list.map(([n, r]) => (r && r !== n ? `${n} (${r})` : n)).join(' · ');
-  $('#ask-yes').textContent = words(c.yes);
-  $('#ask-no').textContent = words(c.no);
-  $('#ask-nums').textContent = c.nums.map(([e, n, r]) => (c.lang === 'en' ? e : `${e} / ${n}${r ? ` (${r})` : ''}`)).join(' · ');
+  // Tap what you heard: yes / no / a number.
+  const chip = (label, cls, fn) => { const b = el('button', `chip-a ${cls}`, label); b.onclick = fn; return b; };
+  $('#ask-yes').replaceChildren(...c.yes.map(([n, r]) => chip(r && r !== n ? `${n} (${r})` : n, 'yes', () => onAnswer('yes'))));
+  $('#ask-no').replaceChildren(...c.no.map(([n, r]) => chip(r && r !== n ? `${n} (${r})` : n, 'no', () => onAnswer('no'))));
+  $('#ask-nums').replaceChildren(...c.nums.map(([e, n, r], i) => chip(c.lang === 'en' ? e : `${i + 1} · ${e} / ${n}`, '', () => onAnswer('number', i + 1))));
+  void words;
 }
 function openAsk() {
   unlockSpeech();
@@ -1242,6 +1267,116 @@ $('#ask-photo').onclick = async () => {
     await navigator.clipboard.writeText(textMsg);
     toast('Question copied: paste it in the chat with the customer.');
   } catch (e) { if (e.name !== 'AbortError') toast(`Couldn't share: ${e.message}`); }
+};
+
+// ---------- Orders from the Instakart demo shop (same phone, tools/serve.py) ----------
+// A customer orders on instakart.html and records voice directions in her language. The order arrives here; the
+// rider accepts it and the voice note becomes the route in the rider's language.
+const LANG_BASE = { tanglish: 'ta', hinglish: 'hi' };
+const LANG_NAME = { ta: 'Tamil', hi: 'Hindi', kn: 'Kannada', ml: 'Malayalam', bn: 'Bengali', en: 'English', tanglish: 'Tamil + English', hinglish: 'Hindi + English' };
+const postOrder = (id, kind, body) => fetch(`api/orders/${id}/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => null);
+const seenOrders = new Set();
+async function pollOrders() {
+  if ($('#home').hidden) return;
+  let list;
+  try { list = await (await fetch('api/orders', { cache: 'no-store' })).json(); } catch { return; }
+  if (!Array.isArray(list)) return;
+  const open = list.filter((o) => o.status === 'placed' && o.id !== state.order?.id);
+  $('#orders').hidden = !open.length;
+  $('#orders-list').replaceChildren(...open.slice(0, 3).map((o) => {
+    const li = el('li'), d = el('div');
+    d.append(el('strong', null, `${o.customer} · ${(o.items || []).reduce((a, i) => a + i.q, 0)} items · ₹${o.total}`),
+      el('span', 'meta', `Instakart #${o.id} · ${o.address} · voice directions in ${LANG_NAME[o.lang] || o.lang}`));
+    const b = el('button', 'btn primary', 'Accept');
+    b.onclick = () => acceptOrder(o);
+    li.append(d, b);
+    return li;
+  }));
+  if (open.some((o) => !seenOrders.has(o.id))) { buzz('ask'); open.forEach((o) => seenOrders.add(o.id)); }
+}
+setInterval(pollOrders, 2500);
+async function acceptOrder(o) {
+  state.order = o;
+  state.custLang = LANG_BASE[o.lang] || o.lang;
+  $('#orders').hidden = true;
+  postOrder(o.id, 'status', { status: 'accepted' });
+  showJob({ src: 'Instakart', id: o.id, who: `${o.customer} · ${o.address}` });
+  if (!o.audio) return toast('This order has no voice directions.');
+  try { openVoiceNote(await (await fetch(o.audio)).blob(), { from: `Instakart #${o.id} · ${LANG_NAME[o.lang] || o.lang}`, lang: o.lang }); }
+  catch (e) { toast(`Couldn't load the voice note: ${e.message}`); }
+}
+
+// The rider's question goes to the customer's order screen, in her language; her one-tap answer comes back.
+async function sendQuestion(l) {
+  state.lastQ = l.key;
+  const expects = l.key === 'gate' ? 'yesno' : l.key === 'more' || l.key === 'floor' ? 'number' : 'ok';
+  const o = await postOrder(state.order.id, 'messages', { from: 'rider', key: l.key, native: l.native, roman: l.roman, expects });
+  const q = o?.messages?.at(-1);
+  renderAsk();
+  if (!q) return toast("Couldn't send the question.");
+  $('#ask-reply').hidden = false;
+  $('#ask-reply').textContent = 'Sent. Waiting for the customer…';
+  clearInterval(state.replyTimer);
+  state.replyTimer = setInterval(async () => {
+    let list;
+    try { list = await (await fetch('api/orders', { cache: 'no-store' })).json(); } catch { return; }
+    const a = list.find((x) => x.id === state.order?.id)?.messages?.find((m) => m.from === 'customer' && m.re === q.at);
+    if (!a) return;
+    clearInterval(state.replyTimer);
+    const meaning = a.answer === 'yes' ? 'yes' : a.answer === 'no' ? 'no' : a.answer;
+    $('#ask-reply').textContent = `Customer answered: ${a.label} (${meaning})`;
+    buzz('spotted');
+    if (a.answer === 'yes' || a.answer === 'no') onAnswer(a.answer);
+    else if (a.answer !== 'ok') onAnswer('number', +a.answer);
+  }, 1500);
+}
+
+// What the customer said, heard on the call (tapped) or answered in the shop app.
+function onAnswer(kind, n) {
+  if (kind === 'yes') { if (state.lastQ === 'floor') return; $('#asheet').hidden = true; return finishDelivery(); }
+  if (kind === 'no') {
+    // Not this gate: ask how many more, then guide on.
+    state.lastQ = 'more';
+    renderAsk();
+    toast('Not this gate. Ask: how many more gates?');
+    return;
+  }
+  if (kind === 'number' && state.lastQ === 'floor') { if (state.card) { state.card.floor = n; saveCard(state.card); renderCard(); } toast(`Floor ${n}`); return; }
+  if (kind === 'number') {
+    // "2 more gates": a new last step, confirmed by the rider, then ask again.
+    const g = state.graph, last = g.steps.at(-1);
+    last.kind = 'pass';
+    const next = { kind: 'arrive', landmark: { type: 'other', name: `the gate ${n} further on`, colour: null }, ref: null,
+      say: { en: `the gate ${n} further on`, hi: `${n} गेट और आगे`, ta: `இன்னும் ${n} கேட் தள்ளி`, kn: `ಇನ್ನೂ ${n} ಗೇಟ್ ಮುಂದೆ`, ml: `ഇനിയും ${n} ഗേറ്റ് മുന്നോട്ട്`, bn: `আরও ${n}টা গেট পরে` } };
+    g.steps.push(next);
+    g.steps.forEach((st, i) => { st.n = i + 1; st.verify = verifyFor(st); });
+    next.verify = { signs: [], alt: [], colour: null, objects: [], compass: null, confidence: 'low' }; // you confirm
+    $('#asheet').hidden = true;
+    show('guide');
+    startGuide(g.steps.length - 1);
+  }
+}
+
+function finishDelivery() {
+  if (state.order) postOrder(state.order.id, 'status', { status: 'delivered' });
+  const h = state.how || [], n = (k) => h.filter((x) => x === k).length;
+  const part = (c, w) => (c ? `${c} ${c > 1 ? 'steps' : 'step'} ${w}` : '');
+  show('arrive');
+  $('#arrive-title').textContent = 'Delivered';
+  $('#arrive-sub').hidden = true;
+  $('#arrive-ask').hidden = $('#arrive-yes').hidden = true;
+  $('#tick').hidden = false;
+  $('#done-summary').hidden = false;
+  $('#done-summary').textContent = [part(n('sign'), 'checked by a sign'), part(n('cue'), 'by cues'), part(n('rider'), 'confirmed by you')].filter(Boolean).join(', ') + '.';
+  $('#again').textContent = state.order ? 'Back to orders' : 'New route';
+  state.order = null;
+  $('#job').hidden = true;
+}
+$('#arrive-yes').onclick = () => finishDelivery();
+$('#her-voice').onclick = () => {
+  const s = state.graph?.steps[state.i];
+  const clip = s && state.vnote?.segments?.length ? clipAt(state.vnote.segments, s.at ?? state.i / state.graph.steps.length) : null;
+  if (clip) playClip(clip, $('#her-voice'));
 };
 
 // ---------- Developer mode: tap the logo 5 times (or open with ?dev) ----------
@@ -1308,7 +1443,7 @@ async function boot() {
     warmNative().then(async (name) => { state.llmDevice = name ? await llmDevice() : null; mark('llm', !!name, name ? `${name} · ${state.llmDevice}` : 'rules only (start.sh)'); }),
     new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
   ];
-  await Promise.race([Promise.allSettled(jobs), new Promise((r) => setTimeout(r, 9000))]);
+  await Promise.race([Promise.allSettled(jobs), new Promise((r) => setTimeout(r, 2500))]);
   await new Promise((r) => setTimeout(r, Math.max(0, 1600 - (performance.now() - t0))));
   let saved = null;
   try { saved = localStorage.getItem('pahunch.mode'); } catch {}

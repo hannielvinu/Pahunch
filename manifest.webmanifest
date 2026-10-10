@@ -35,19 +35,6 @@
       "purpose": "any"
     }
   ],
-  "shortcuts": [
-    {
-      "name": "Partner app demo",
-      "short_name": "Partner demo",
-      "url": "./partner.html",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    }
-  ],
   "share_target": {
     "action": "./share",
     "method": "POST",

@@ -169,6 +169,7 @@ export function localName(lm, lang = 'en') {
 export function stepText(step, lang = 'en') {
   const T = text(lang);
   if (step.kind === 'turn') return T.turn(step.ordinal, T[step.turn]);
+  if (step.say?.[lang]) return `${T.dest}: ${step.say[lang]}`; // a step Pahunch wrote itself, in fixed phrases
   const name = localName(step.landmark, lang);
   if (step.kind === 'pass') return T.look(name);
   return `${T.dest}: ${name}${step.ref?.landmark ? ` · ${localName(step.ref.landmark, lang)}` : ''}`;

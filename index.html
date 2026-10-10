@@ -99,6 +99,10 @@
       <p id="home-sub" class="meta">Open the customer's voice note, or speak or paste their directions as they gave them.</p>
       <p id="voice-pack" class="voice-pack" hidden></p>
     </div>
+    <div id="orders" class="orders" hidden>
+      <p class="orders-h">New order</p>
+      <ul id="orders-list"></ul>
+    </div>
     <div id="job" class="job" hidden>
       <div class="job-top"><span id="job-src" class="job-src">Partner app</span><span id="job-id" class="job-id"></span></div>
       <strong id="job-who"></strong>
@@ -146,7 +150,7 @@
       <span class="ico"><svg class="i lg" aria-hidden="true"><use href="#i-mic"/></svg></span>
       <span><strong>Customer on the phone? Call mode</strong><em>Put the call on speaker: live captions in your language, then the route</em></span>
     </button>
-    <button id="stepmode" class="link">Speak step by step</button>
+    <button id="stepmode" class="link dev-only">Speak step by step</button>
     <div class="row" hidden>
       <button id="paste" class="btn ghost"><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg>Paste from laptop</button>
     </div>
@@ -187,7 +191,6 @@
       <pre id="device"></pre>
     </div>
     <button id="demo" class="link dev-only">Load demo route</button>
-    <a href="partner.html" class="link partner-link">Open the partner app demo (rider · customer · 108)</a>
     <div id="samples" hidden></div>
   </section>
 
@@ -243,6 +246,9 @@
         <span id="scene-chip" class="pill" hidden></span>
       </div>
       <div id="step-line" class="step-now"></div>
+      <div id="step-en" class="step-en-g"></div>
+      <div id="step-next" class="step-next"></div>
+      <div id="dots" class="dots"></div>
       <div id="seen" class="seen"></div>
     </div>
     <div id="colour-bars" class="colour-bars" hidden><i></i><i></i><i></i></div>
@@ -260,7 +266,8 @@
         <button id="stop" class="btn ghost icon-btn" aria-label="Stop"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
         <button id="handsfree" class="btn ghost" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Hands-free</button>
         <button id="ask-open" class="btn ghost">Ask</button>
-        <button id="skip" class="btn ghost">Skip<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
+        <button id="her-voice" class="btn ghost" hidden>▶ Her voice</button>
+        <button id="skip" class="btn ghost">I'm here<svg class="i" aria-hidden="true"><use href="#i-next"/></svg></button>
         <button id="turned" class="btn primary" hidden>I've turned</button>
       </div>
     </div>
@@ -271,6 +278,8 @@
     <h2 id="arrive-title">You've arrived</h2>
     <p id="arrive-sub" class="meta center" hidden></p>
     <button id="arrive-ask" class="btn primary big" hidden>Ask the customer: is this the gate?</button>
+    <button id="arrive-yes" class="btn ghost big" hidden>Yes, this is it</button>
+    <p id="done-summary" class="done-summary" hidden></p>
     <article id="card" class="card">
       <label class="photo" for="photo-in">
         <img id="card-photo" alt="Door photo" hidden>
@@ -335,13 +344,14 @@
     <div class="vcard acard">
       <div class="arow"><p class="vtitle">Say this to the customer</p><select id="ask-lang" aria-label="Customer's language"></select></div>
       <p id="ask-note" class="meta"></p>
+      <p id="ask-reply" class="reply" hidden></p>
       <ul id="ask-lines" class="alines"></ul>
       <div class="listen">
         <strong>Listen for</strong>
         <p><span class="lbl yes">Yes</span><span id="ask-yes"></span></p>
         <p><span class="lbl no">No</span><span id="ask-no"></span></p>
         <p><span class="lbl">Numbers</span><span id="ask-nums"></span></p>
-        <p class="meta">If you hear "no" anywhere in the answer, take it as no. Numbers often come in English.</p>
+        <p class="meta">Tap what you heard. If you hear "no" anywhere in the answer, take it as no. Numbers often come in English.</p>
       </div>
       <div class="row erow">
         <button id="ask-photo" class="btn ghost">Send photo + question</button>

@@ -346,3 +346,30 @@ body.flashing::after { content: ""; position: fixed; inset: 0; z-index: 11; poin
 .listen .lbl { display: inline-block; min-width: 72px; font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
 .listen .lbl.yes { color: #15803d; } .listen .lbl.no { color: #b91c1c; }
 #arrive-sub { margin: -6px 0 0; }
+/* Incoming orders (Instakart demo shop) */
+.orders { background: var(--panel); border: 1.5px solid var(--accent); border-radius: 16px; padding: 10px 12px; box-shadow: var(--shadow); animation: rise .35s ease-out; }
+.orders[hidden] { display: none; }
+.orders-h { margin: 0 0 6px; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.orders ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.orders li { display: flex; gap: 10px; align-items: center; }
+.orders li div { flex: 1; min-width: 0; }
+.orders li strong { display: block; font-size: 15px; }
+.orders li .meta { font-size: 12.5px; }
+.orders li .btn { min-height: 42px; padding: 8px 16px; flex: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+/* Guidance: the step in the rider's language, English, next step, progress dots */
+.step-en-g { font-size: 13px; color: #ffffffcc; margin-top: 2px; }
+.step-next { font-size: 13px; color: #ffffffb3; margin-top: 6px; }
+.step-next:empty, .step-en-g:empty { display: none; }
+.dots { display: flex; gap: 5px; margin-top: 8px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: #ffffff55; }
+.dots i.done { background: #4ade80; } .dots i.now { background: #fff; }
+/* Door card answers */
+.reply { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #e9f9ee; color: #14532d; font-weight: 700; }
+.reply[hidden] { display: none; }
+.listen .chip-a { border: 1.5px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 11px; margin: 3px 4px 0 0; font: 650 14px Inter, sans-serif; color: var(--text); }
+.listen .chip-a.yes { border-color: #15803d; } .listen .chip-a.no { border-color: #b91c1c; }
+.alines li.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--soft); }
+.alines .send { flex: none; min-height: 40px; padding: 6px 12px; }
+.done-summary { text-align: center; color: var(--dim); font-size: 14px; margin: 0; }
+.done-summary[hidden] { display: none; }
