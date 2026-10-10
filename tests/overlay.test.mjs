@@ -42,7 +42,8 @@ check('network meter counts only off-device traffic', () => {
     { name: 'https://cdn.example.com/a.js', transferSize: 2048 },
     { name: 'https://opaque.example.com/b', transferSize: 0, encodedBodySize: 0 },
   ]);
-  assert.deepEqual(t, { requests: 2, bytes: 2048 });
+  assert.deepEqual({ requests: t.requests, bytes: t.bytes }, { requests: 2, bytes: 2048 });
+  assert.deepEqual([...t.hosts].sort(), ['cdn.example.com', 'opaque.example.com']);
   assert.equal(formatBytes(0), '0 B');
   assert.equal(formatBytes(2048), '2.0 KB');
 });
