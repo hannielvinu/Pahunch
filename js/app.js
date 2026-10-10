@@ -182,7 +182,8 @@ function announce(prefix = '') {
   const intro = s.n === 1 && !prefix ? `${ambulance() ? 'Emergency route. ' : ''}${T().intro} ${s.kind === 'pass' ? T().straight + ' ' : ''}` : '';
   const lead = prefix ? `${prefix} ${T().now} ` : intro;
   if (s.kind === 'turn') {
-    say(lead + T().turn(s.ordinal, T()[s.turn]), state.lang);
+    const inst = T().turn(s.ordinal, T()[s.turn]);
+    say(lead + (prefix ? inst.charAt(0).toLowerCase() + inst.slice(1) : inst), state.lang);
     buzz(s.turn);
     state.turn = new GyroTurn(sensors, compass, s.turn, () => confirmStep(T().turned));
     overlay.setTurn(state.turn);
