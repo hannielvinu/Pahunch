@@ -210,6 +210,24 @@
     </div>
   </div>
 
+  <!-- Fix a step -->
+  <div id="esheet" class="vsheet" hidden>
+    <div class="vcard ecard">
+      <p id="e-title" class="vtitle">Step</p>
+      <div id="e-kind" class="seg"><button data-k="place">Landmark</button><button data-k="turn">Turn</button></div>
+      <div id="e-turn">
+        <div id="e-dir" class="seg"><button data-d="left">Left</button><button data-d="right">Right</button></div>
+        <div id="e-ord" class="seg"><button data-o="1">1st</button><button data-o="2">2nd</button><button data-o="3">3rd</button><button data-o="4">4th</button></div>
+      </div>
+      <div id="e-place"><input id="e-text" class="etext" placeholder="e.g. blue gate opposite MedPlus" autocomplete="off"></div>
+      <div class="row erow">
+        <button id="e-del" class="btn ghost">Delete</button>
+        <button id="e-cancel" class="btn ghost">Cancel</button>
+        <button id="e-save" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="net" class="net-chip" title="Requests to anything other than this phone, measured by the browser">On-device · 0 B sent</div>
   <div id="toast" class="toast" hidden></div>
 </body>

@@ -232,3 +232,17 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vlangs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .vlang { border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 10px; padding: 7px 12px; font: 600 13px Inter, sans-serif; }
 .vlang.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Tap-to-fix plan steps */
+.step { cursor: pointer; }
+.step:active { transform: scale(.99); }
+.step.add-step { counter-increment: none; padding-left: 16px; text-align: center; color: var(--accent); font-weight: 700; border-style: dashed; box-shadow: none; }
+.step.add-step::before { content: none; }
+.ecard { align-items: stretch; text-align: left; }
+.seg { display: flex; gap: 6px; background: var(--panel-2); padding: 4px; border-radius: 12px; }
+.seg button { flex: 1; border: 0; background: transparent; border-radius: 9px; padding: 10px; font: 650 15px Inter, sans-serif; color: var(--text); }
+.seg button.on { background: #fff; color: var(--accent); box-shadow: var(--shadow); }
+#e-turn { display: flex; flex-direction: column; gap: 8px; }
+.etext { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 14px; font: 17px Inter, sans-serif; }
+.erow { flex-wrap: nowrap; }
+.erow .btn { flex: 1; }

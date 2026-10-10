@@ -1,5 +1,5 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
-import { SAMPLES, describe } from './parser.js';
+import { SAMPLES, describe, parseRules, verifyFor } from './parser.js';
 import { parseNote, warmNative, complete } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
@@ -148,18 +148,75 @@ function renderPlan() {
   }
   const list = $('#steps');
   list.replaceChildren();
-  for (const s of g.steps) {
+  g.steps.forEach((s, i) => {
     const li = el('li', `step kind-${s.kind}`);
     li.append(el('div', 'step-line', describe(s)));
     const row = el('div', 'chips');
     for (const [cls, label] of chips(s)) row.append(el('span', `tag ${cls}`, label));
     li.append(row);
+    li.tabIndex = 0;
+    li.onclick = () => openEditor(i); // tap a step to fix it
     list.append(li);
-  }
+  });
+  const add = el('li', 'step add-step', '+ Add a step');
+  add.onclick = () => openEditor(g.steps.length);
+  list.append(add);
   $('#floor').textContent = g.floor != null ? `Floor: ${g.floor === 0 ? 'ground' : g.floor}` : '';
 }
 
 $('#edit').onclick = () => show('home');
+
+// ---------- Fix a step (tap on the plan) ----------
+// Turns: left/right and which turn. Landmarks: type what it is ("blue gate", "Ganesha temple"), optional colour.
+let editing = null;
+function renumber(g) {
+  const last = g.steps.at(-1);
+  g.steps.forEach((s, i) => { if (s.kind === 'arrive' && i < g.steps.length - 1) s.kind = 'pass'; });
+  if (last && last.kind === 'pass') last.kind = 'arrive';
+  g.steps.forEach((s, i) => { s.n = i + 1; s.verify = verifyFor(s); });
+}
+function openEditor(i) {
+  const g = state.graph, s = g.steps[i];
+  editing = { i, kind: s?.kind === 'turn' ? 'turn' : 'place', turn: s?.turn || 'left', ordinal: s?.ordinal || 1,
+    text: s && s.kind !== 'turn' ? [s.landmark?.colour, s.landmark?.name, s.landmark && s.landmark.type !== 'other' ? s.landmark.type.replace('_', ' ') : ''].filter(Boolean).join(' ') : '' };
+  $('#esheet').hidden = false;
+  $('#e-del').hidden = !s;
+  $('#e-title').textContent = s ? `Step ${i + 1}` : 'New step';
+  renderEditor();
+}
+function renderEditor() {
+  const e = editing;
+  document.querySelectorAll('#e-kind button').forEach((b) => b.classList.toggle('on', b.dataset.k === e.kind));
+  $('#e-turn').hidden = e.kind !== 'turn';
+  $('#e-place').hidden = e.kind === 'turn';
+  document.querySelectorAll('#e-dir button').forEach((b) => b.classList.toggle('on', b.dataset.d === e.turn));
+  document.querySelectorAll('#e-ord button').forEach((b) => b.classList.toggle('on', +b.dataset.o === e.ordinal));
+  $('#e-text').value = e.text;
+}
+document.querySelectorAll('#e-kind button').forEach((b) => (b.onclick = () => { editing.kind = b.dataset.k; renderEditor(); }));
+document.querySelectorAll('#e-dir button').forEach((b) => (b.onclick = () => { editing.turn = b.dataset.d; renderEditor(); }));
+document.querySelectorAll('#e-ord button').forEach((b) => (b.onclick = () => { editing.ordinal = +b.dataset.o; renderEditor(); }));
+$('#e-text').oninput = (ev) => (editing.text = ev.target.value);
+$('#e-cancel').onclick = () => ($('#esheet').hidden = true);
+$('#e-del').onclick = () => {
+  state.graph.steps.splice(editing.i, 1);
+  if (!state.graph.steps.length) state.graph.steps.push({ kind: 'arrive', landmark: null, ref: null });
+  renumber(state.graph); $('#esheet').hidden = true; renderPlan();
+};
+$('#e-save').onclick = () => {
+  const e = editing, g = state.graph, old = g.steps[e.i];
+  let step;
+  if (e.kind === 'turn') step = { kind: 'turn', turn: e.turn, ordinal: e.ordinal, road: old?.road || null };
+  else {
+    // Reuse the parser to read what was typed ("blue gate opposite MedPlus", "Ganesha temple").
+    const p = parseRules(e.text || '').steps.find((x) => x.landmark) || null;
+    if (!p) return toast('Type the landmark, e.g. "blue gate" or "Ganesha temple".');
+    step = { kind: old?.kind === 'turn' || !old ? 'pass' : old.kind, landmark: p.landmark, ref: p.ref || null };
+  }
+  g.steps.splice(e.i, old ? 1 : 0, step);
+  renumber(g); $('#esheet').hidden = true; renderPlan();
+  buzz('spotted');
+};
 $('#start').onclick = () => { unlockSpeech(); startGuide(); };
 
 // ---------- Guide ----------
