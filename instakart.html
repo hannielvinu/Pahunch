@@ -44,6 +44,21 @@
     .label { font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
     .line { display: flex; justify-content: space-between; font-size: 14px; margin: 3px 0; }
     .rec { display: flex; align-items: center; gap: 12px; }
+    .langs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+    .langs button { flex: none; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 650; font-size: 13.5px; color: var(--ink); }
+    .langs button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .speak { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0 6px; text-align: center; }
+    .speak .mic { width: 76px; height: 76px; margin-bottom: 6px; }
+    .speak .mic svg { width: 32px; height: 32px; }
+    .speak strong { font-size: 16px; }
+    .speak .muted { max-width: 300px; }
+    #words-wrap textarea { margin-top: 10px; font-size: 16px; line-height: 1.45; }
+    #words-wrap .muted { margin: 6px 2px 0; }
+    .typelink { display: block; margin: 4px auto 0; border: 0; background: none; color: var(--dim); font-size: 13px; text-decoration: underline; }
+    .done-hero { text-align: center; padding: 22px 14px; }
+    .done-hero .ok { width: 64px; height: 64px; border-radius: 50%; background: var(--ok); color: #fff; display: grid; place-items: center; margin: 0 auto 10px; box-shadow: 0 12px 24px -12px var(--ok); }
+    .done-hero .ok svg { width: 34px; height: 34px; }
+    .done-hero h2 { margin: 0 0 4px; font-size: 22px; }
     .mic { width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: grid; place-items: center; flex: none; box-shadow: 0 10px 20px -10px var(--brand); }
     .mic svg { width: 26px; height: 26px; }
     .mic.live { animation: pulse 1s ease-in-out infinite; background: #e11d48; }
@@ -90,27 +105,23 @@
       <div class="muted">Flat 2B, 4th Cross, Indiranagar, Bengaluru</div>
     </div>
     <div class="card">
-      <p class="label">Help your rider find your door</p>
-      <p class="label" >I'm speaking in</p>
-      <select id="lang">
-        <option value="auto">Choose…</option>
-        <option value="ta">தமிழ் Tamil</option>
-        <option value="hi">हिन्दी Hindi</option>
-        <option value="kn">ಕನ್ನಡ Kannada</option>
-        <option value="ml">മലയാളം Malayalam</option>
-        <option value="bn">বাংলা Bengali</option>
-        <option value="en">English</option>
-        <option value="tanglish">Tamil + English mix</option>
-        <option value="hinglish">Hindi + English mix</option>
+      <p class="label">Directions to your door</p>
+      <div class="langs" id="langs" role="radiogroup" aria-label="Language you speak"></div>
+      <select id="lang" hidden>
+        <option value="auto"></option><option value="ta">தமிழ்</option><option value="hi">हिन्दी</option><option value="kn">ಕನ್ನಡ</option>
+        <option value="ml">മലയാളം</option><option value="bn">বাংলা</option><option value="en">English</option>
+        <option value="tanglish">Tamil + English</option><option value="hinglish">Hindi + English</option>
       </select>
-      <div class="rec" style="margin-top:12px">
+      <div class="speak">
         <button class="mic" id="mic" aria-label="Speak your directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-        <div><strong id="rec-title">Speak your directions</strong><div class="muted" id="rec-state">In your own language: landmarks, turns, gate colour, floor.</div></div>
+        <strong id="rec-title">Tap and speak</strong>
+        <span class="muted" id="rec-state">Landmarks, turns, gate colour, floor, in your own words.</span>
       </div>
-      <p class="label" style="margin-top:12px">Your words <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· check and correct them</span></p>
-      <textarea id="words" rows="3" placeholder="Your directions appear here as you speak. You can also type them."></textarea>
-      <p class="muted" id="words-src" style="margin:6px 0 0">Your words appear here as you speak.</p>
-      <p class="muted" style="margin:8px 0 0">Your rider gets these directions in their own language.</p>
+      <div id="words-wrap" class="hidden">
+        <textarea id="words" rows="3" placeholder="Type your directions"></textarea>
+        <p class="muted" id="words-src"></p>
+      </div>
+      <button class="typelink" id="type-instead">Type instead</button>
     </div>
     <button class="btn" id="place">Place order</button>
     <button class="btn ghost" id="back" style="margin-top:8px">Back to shop</button>
@@ -118,7 +129,12 @@
 
   <!-- Order tracking -->
   <main id="track" class="hidden">
-    <div class="card">
+    <div class="card done-hero hidden" id="o-done">
+      <div class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2>Delivered</h2>
+      <p class="muted" id="o-done-time"></p>
+    </div>
+    <div class="card" id="o-card">
       <p class="label">Order <span id="o-id"></span></p>
       <strong id="o-head">Order placed</strong>
       <ul class="steps" id="o-steps"></ul>
@@ -191,13 +207,27 @@
     // recording at the same moment, so the page only listens: her checked words are what the rider's route is built from.
     let voice = null, listening = false, base = '';
     const say = (msg) => ($('#words-src').textContent = msg);
+    const showWords = () => $('#words-wrap').classList.remove('hidden');
+    const LANGS = [['ta', 'தமிழ்'], ['hi', 'हिन्दी'], ['kn', 'ಕನ್ನಡ'], ['ml', 'മലയാളം'], ['bn', 'বাংলা'], ['en', 'English'], ['tanglish', 'Tamil + English'], ['hinglish', 'Hindi + English']];
+    function renderLangs() {
+      $('#langs').replaceChildren(...LANGS.map(([k, name]) => {
+        const b = el('button', $('#lang').value === k ? 'on' : '', name);
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String($('#lang').value === k));
+        b.onclick = () => { $('#lang').value = k; try { localStorage.setItem('instakart.lang', k); } catch {} renderLangs(); };
+        return b;
+      }));
+    }
+    try { const k = localStorage.getItem('instakart.lang'); if (k) $('#lang').value = k; } catch {}
+    renderLangs();
+    $('#type-instead').onclick = () => { showWords(); $('#words').focus(); };
     function stopListening() {
       listening = false;
       voice?.dictate.stop?.();
       $('#mic').classList.remove('live');
       const has = !!$('#words').value.trim();
-      $('#rec-title').textContent = has ? 'Directions captured' : 'Speak your directions';
-      $('#rec-state').textContent = has ? 'Check your words below, then place the order. Tap the mic to add more.' : 'Tap the mic and speak.';
+      $('#rec-title').textContent = has ? 'Got your directions' : 'Tap and speak';
+      $('#rec-state').textContent = has ? 'Check the words below. Tap the mic to add more.' : 'Landmarks, turns, gate colour, floor, in your own words.';
+      if (has) showWords();
     }
     async function listenLoop() {
       try { voice ||= await import('./js/voice.js'); } catch { say('Please type your directions.'); return stopListening(); }
@@ -205,7 +235,7 @@
       let quiet = 0;
       while (listening) {
         try {
-          const t = await voice.dictate($('#lang').value, (p) => { if (listening) { $('#words').value = (base + p).trim(); say('Hearing you…'); } });
+          const t = await voice.dictate($('#lang').value, (p) => { if (listening) { showWords(); $('#words').value = (base + p).trim(); say('Hearing you…'); } });
           if (t) { base += t.trim() + ' '; $('#words').value = base.trim(); quiet = 0; say('Keep going, or tap the mic when you are done.'); }
           else if (listening && ++quiet >= 2) { say(base.trim() ? 'Done listening. Check your words, correct anything that is wrong.' : "Didn't hear anything. Tap the mic and speak."); break; }
         } catch (e) {
@@ -222,7 +252,7 @@
     }
     $('#mic').onclick = () => {
       if (listening) return stopListening();
-      if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'First choose the language you will speak in.'; return; }
+      if ($('#lang').value === 'auto') { $('#rec-state').textContent = 'First choose the language you speak, above.'; $('#langs').animate?.([{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 250, iterations: 2 }); return; }
       listening = true;
       base = $('#words').value.trim() ? $('#words').value.trim() + ' ' : '';
       $('#mic').classList.add('live');
@@ -235,7 +265,7 @@
     $('#place').onclick = async () => {
       if (listening) stopListening();
       if (!$('#words').value.trim()) { $('#rec-state').textContent = 'Please speak (or type) your directions first.'; return; }
-      if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'Choose the language you spoke in.'; return; }
+      if ($('#lang').value === 'auto') { $('#rec-state').textContent = 'Choose the language you speak, above.'; return; }
       const items = [...cart].map(([id, q]) => ({ name: PRODUCTS[id].name, q, price: PRODUCTS[id].price }));
       const order = { customer: 'Priya S.', phone: '+91 98xxx xx210', address: 'Flat 2B, 4th Cross, Indiranagar', items, total: items.reduce((a, i) => a + i.price * i.q, 0), lang: $('#lang').value, note: $('#words').value.trim(), audio: audioUrl };
       $('#place').disabled = true; $('#place').textContent = 'Placing order…';
@@ -251,14 +281,18 @@
     };
 
     // Order tracking: status from the rider app; the rider's questions appear here, answered with one tap.
-    const STEPS = [['placed', 'Order placed'], ['accepted', 'Rider picked up your order'], ['arrived', 'Rider is at your lane'], ['delivered', 'Delivered']];
+    const STEPS = [['placed', 'Order placed'], ['accepted', 'Rider is on the way'], ['delivered', 'Delivered']];
     let shownAudio = '';
     async function poll() {
       if (!orderId) return;
       try {
         const o = (await (await fetch('api/orders', { cache: 'no-store' })).json()).find((x) => x.id === orderId);
         if (!o) return;
-        const k = STEPS.findIndex(([s]) => s === o.status);
+        const k = Math.max(0, STEPS.findIndex(([s]) => s === o.status));
+        const done = o.status === 'delivered';
+        $('#o-done').classList.toggle('hidden', !done);
+        $('#o-card').classList.toggle('hidden', done);
+        if (done && !$('#o-done-time').textContent) $('#o-done-time').textContent = `Delivered at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Thank you for ordering!`;
         $('#o-id').textContent = `#${o.id}`;
         $('#o-head').textContent = STEPS[Math.max(0, k)][1];
         $('#o-steps').replaceChildren(...STEPS.map(([s, t], i) => { const li = el('li', i < k || o.status === 'delivered' ? 'done' : i === k ? 'now' : ''); li.append(el('i'), el('span', null, t)); return li; }));
@@ -289,7 +323,7 @@
     }
     $('#cartbar').onclick = openCheckout;
     $('#back').onclick = () => $('#checkout').classList.add('hidden');
-    $('#new').onclick = () => { orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
+    $('#new').onclick = () => { $('#o-done-time').textContent = ''; orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
     try { orderId = localStorage.getItem('instakart.order'); } catch {}
     renderShop();
     if (orderId) showTrack();

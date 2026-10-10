@@ -592,7 +592,6 @@ function flash() {
 // ---------- Arrive ----------
 function arrive() {
   const g = state.graph;
-  if (state.order) postOrder(state.order.id, 'status', { status: 'arrived' });
   const secs = Math.round((performance.now() - state.startedAt) / 1000);
   say(T().arrived(g.floor), state.lang);
   buzz('arrived');
@@ -601,6 +600,7 @@ function arrive() {
   saveCard(state.card);
   showCard(state.card, true);
   fixPosition(state.card);
+  if (state.order) finishDelivery(); // reaching the end of her directions completes the order in Instakart
 }
 
 // Door card: saved straight away, then filled in as the GPS fix and the photo arrive.
