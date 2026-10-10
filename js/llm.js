@@ -7,7 +7,7 @@
 // the words in the note; when the rule parser already reads a complete route, its route is used and the
 // model acts as a cross-check.
 
-import { LANDMARKS, verifyFor, parseRules, describe, COLOUR_OF, TYPE_OF, BRANDS, GENERIC, mentionsRelation, routeWords, isRoute, typeSaid } from './parser.js';
+import { LANDMARKS, verifyFor, parseRules, describe, COLOUR_OF, TYPE_OF, BRANDS, GENERIC, mentionsRelation, routeWords, isRoute, typeOrFamilySaid, unknownWords } from './parser.js';
 
 const NATIVE_URL = 'http://localhost:8081';
 const BROWSER_MODEL = 'Qwen2.5-1.5B-Instruct';
@@ -141,7 +141,7 @@ The input may be English, Hindi, Tamil, Kannada, Malayalam or a mix, in any scri
 Use only these phrases, joined by commas:
 "go past the <landmark>", "take the first|second|third|fourth left|right", "then the <colour> <landmark> opposite|next to|near the <landmark>", "<number> floor".
 Keep the customer's proper names (temple names, shop names) in English letters. Translate colours and landmark words to English (mandir/kovil = temple, medical = pharmacy, gate, house, shop).
-Keep the starting point as a landmark ("from the bus stop side" = "go past the bus stop"). A place they say not to enter or not to turn at is still a landmark to go past ("there is Apollo pharmacy, don't go there" = "go past the Apollo pharmacy"). Leave out filler. Never add landmarks that were not said. Output only the line.`;
+Keep the starting point as a landmark ("from the bus stop side" = "go past the bus stop"). A place they say not to enter or not to turn at is still a landmark to go past ("there is Apollo pharmacy, don't go there" = "go past the Apollo pharmacy"). Leave out filler. Never add landmarks that were not said: if only turns are said, write only the turns. Output only the line.`;
 
 const SHOTS_REWRITE = [
   ['Main road se seedha aao, Ganesh mandir ke baad doosri gali mein baayen mudo, phir MedPlus medical ke saamne neela gate. Doosri manzil.',
@@ -152,6 +152,8 @@ const SHOTS_REWRITE = [
     'go past the bus stand, take the first left, then the yellow house next to the Apollo pharmacy'],
   ['ok so u come from the metro side, theres a big Reliance store, dont go inside, take the third right after it, our house is the white one in front of the park, 2nd floor',
     'go past the metro station, go past the Reliance store, take the third right, then the white house opposite the park, second floor'],
+  ['nera poi left eduthutu appuram rightu',
+    'take the first left, take the first right'],
   ['walk to the registration desk, then left at the coffee machine and you will see the black chair near the stage',
     'go past the registration desk, go past the coffee machine, take the first left, then the black chair near the stage'],
 ];
@@ -439,6 +441,8 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
   // asked at all (a chat model would chat back).
   if (!routeWords(note)) return { graph: rules, stats: null, notRoute: true };
   if (mode === 'rules') return { graph: rules, stats: null };
+  // The rules understood every word: their route is exact and instant, the model could only add risk.
+  if (mode === 'auto' && isRoute(rules) && !unknownWords(note, rules).length) return { graph: rules, stats: null, sure: true };
   let backend = mode;
   if (mode === 'auto') backend = (await nativeUp()) ? 'native' : device?.webgpu && (await hasBrowserModel()) ? 'browser' : null;
   if (!backend) return { graph: rules, stats: null, fallback: 'no on-device model running' };
@@ -453,10 +457,10 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
       const rw = parseRules(line);
       // Names in the rewrite must come from the customer's words (skipped for native-script notes: transliterated).
       for (const s of rw.steps) for (const lm of [s.landmark, s.ref?.landmark]) if (lm?.name) lm.name = cleanName(lm.name, note);
-      // A landmark type the customer never mentioned, with no name of theirs behind it, was invented: drop it.
-      // (Latin-script notes; native-script words can't all be string-checked.)
+      // A landmark type the customer never mentioned was invented: drop it. In Latin letters a name of theirs can
+      // stand on its own (checked above); in native script names can't be string-checked, so the type must be said.
       const latin = !/[^\u0000-ɏ]/.test(note);
-      const invented = (lm) => latin && lm && lm.type !== 'other' && !lm.name && !typeSaid(note, lm.type);
+      const invented = (lm) => lm && lm.type !== 'other' && (!latin || !lm.name) && !typeOrFamilySaid(note, lm.type);
       for (const s of rw.steps) {
         if (invented(s.landmark)) s.landmark = null;
         if (invented(s.ref?.landmark)) s.ref = null;

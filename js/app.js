@@ -138,7 +138,7 @@ function renderPlan() {
   const usedAI = g.parser === 'llm' && st && !p.fallback;
   $('#parsed-by').textContent = usedAI
     ? `Understood on this phone in ${(st.ms / 1000).toFixed(1)} s · on-device AI (${st.model.replace(/.gguf$/, '')})`
-    : `Understood on this phone in ${g.ms} ms · rule engine${p.fallback && p.fallback !== 'no on-device model running' ? ' (AI answer unclear)' : p.fallback ? ' (AI model not running)' : ''}`;
+    : `Understood on this phone in ${g.ms} ms · rule engine${p.sure ? ' (every word understood, AI not needed)' : ''}${p.fallback && p.fallback !== 'no on-device model running' ? ' (AI answer unclear)' : p.fallback ? ' (AI model not running)' : ''}`;
   if (false) $('#parsed-by').textContent = g.parser === 'llm' && st
     ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
     : st && !p.fallback

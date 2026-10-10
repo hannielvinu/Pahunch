@@ -41,6 +41,10 @@ const MAP = {
   ആശുപത്രി: 'hospital', ബാങ്ക്: 'bank', ബസ്: 'bus', എതിരെ: 'saamne', എതിർവശ: 'saamne', അടുത്ത്: 'paas', സമീപം: 'paas', കഴിഞ്ഞ്: 'baad', പിന്നെ: 'phir',
   റോഡ്: 'road', വഴി: 'road', നില: 'floor', പച്ച: 'green', നീല: 'blue', ചുവന്ന: 'red', ചുവപ്പ്: 'red', മഞ്ഞ: 'yellow', വെള്ള: 'white', കറുത്ത: 'black', തിരിയ: 'turn',
   // ---- filler words (come / go / there / that / is…) mapped to words the parser already ignores
+  எடு: 'edu', திரும்ப: 'turn', போயி: 'poi', ஒரு: 'oru', அங்கே: 'there', வந்து: 'vandhu', இருந்து: 'irundhu',
+  आगे: 'aage', जाकर: 'jakar', जाके: 'jaake', चलिए: 'chaliye', चलो: 'chalo', मुड़िए: 'mudiye',
+  ಮಾಡಿ: 'madi', ತಗೊಳ್ಳಿ: 'togoli', ತೆಗೆದುಕೊಳ್ಳಿ: 'togoli', ಮುಂದೆ: 'munde',
+  ഉള്ള: 'wala', തിരി: 'turn', ചെയ്: 'cheyyu', എടുത്ത്: 'eduthu', സ്കൂളി: 'school', ബാങ്കി: 'bank', അമ്പലത്തി: 'temple', ക്ഷേത്രത്തി: 'temple', പള്ളി: 'church',
   வாங்க: 'vaanga', வா: 'vaa', போய்: 'poi', அந்த: 'andha', இந்த: 'indha', கலர்: 'color', பண்ண: 'pannu', கட்: 'cut', இருக்கு: 'irukku', நில்லு: 'nillunga', அங்க: 'there', இங்க: 'here',
   आइए: 'aao', आओ: 'aao', आना: 'aana', जाना: 'jana', है: 'hai', हैं: 'hain', वहाँ: 'wahan', वहां: 'wahan', यहाँ: 'yahan', उस: 'that', इस: 'this', और: 'aur', लीजिए: 'lijiye', लो: 'lo',
   ಬನ್ನಿ: 'banni', ಬಾ: 'baa', ಹೋಗಿ: 'hogi', ಅಲ್ಲಿ: 'alli', ಇಲ್ಲಿ: 'illi', ಆ: 'that', ಈ: 'this', ಇದೆ: 'ide',

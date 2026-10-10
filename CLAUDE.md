@@ -9,7 +9,7 @@ Phase 1 prototype: never copy from it).
 
 ## Hard rules
 - **Commits show only Hanniel.** No `Co-Authored-By: Claude`, no "Generated with Claude" lines.
-- Commit + push after every working change. Run all five test files first (below); they must pass.
+- Commit + push after every working change. Run all seven test files first (below); they must pass.
 - Never claim the NPU or the Q3 chip runs a model. Truth: llama.cpp / whisper.cpp run on the CPU in Termux; vision
   runs on the Adreno GPU via MediaPipe. The OpenCL (GPU) llama.cpp build segfaults on this phone (GPU off by default).
 - Don't break the working demo. Safe tags: `cp1-safe`, `cp2-safe`. Feature freeze Sat 17:30 for Checkpoint 2 (19:00).
@@ -41,7 +41,7 @@ Phase 1 prototype: never copy from it).
 
 ## Measured (on the phone)
 - `node tools/eval-llm.mjs`: Gemma 3n E2B rewriter **7/7 at 5.0 s/route** (Qwen3-1.7B 4/7 at 3.8 s; old approaches 1/7–3/7).
-- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs`
+- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs && node tests/understanding.test.mjs && node tests/languages.test.mjs && node tests/heldout.test.mjs`
 - Voice: `node tools/eval-voice.mjs` scores recordings in tests/voice/ (needs whisper-server + ffmpeg).
 
 ## Not directions / chat input (Sat 18:15)
@@ -53,3 +53,10 @@ tests/understanding.test.mjs fakes llama-server and covers these (chat, question
 ## Offline voice: phone setup (once, while online)
 Google app → Settings → Voice → Offline speech recognition → download English (India), Hindi, Tamil (and Kannada,
 Malayalam). Voice language in the Google app should include them. Chrome needs microphone permission.
+
+## Language coverage (Sat evening)
+tests/languages.test.mjs: 40 routes (English, Hinglish, Hindi, Tanglish, Tamil, Kanglish, Kannada, Manglish, Malayalam,
+native+English mixes, speech spellings like "righu"/"rite"/"leftu") + 10 small-talk lines, rules only: 50/50.
+tests/heldout.test.mjs: 30 routes written after tuning: 23/30 on first run (2 of the 7 misses were wrong expectations),
+30/30 after general fixes. Routing: if the rules understand every word (unknownWords empty) the model is not asked
+("every word understood, AI not needed"); otherwise Gemma rewrites and its landmarks must be said (any script).

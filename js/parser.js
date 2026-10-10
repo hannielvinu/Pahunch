@@ -10,16 +10,21 @@ import { normaliseNative } from './native.js';
 const W = (s) => s.split(/\s+/).filter(Boolean);
 const set = (...lists) => new Set(lists.flatMap(W));
 
-const LEFT = set('left baayen baayein bayen baaye baye baen baayan baya baayi edakke edakkey edagade edakke idathu idadhu idadu idathu', 'बाएं बायें बाएँ बाये ಎಡಕ್ಕೆ ಎಡಗಡೆ இடது இடதுபுறம்');
-const RIGHT = set('right daayen daayein dayen daaye daye daen daahine dahine balakke balakkey balagade valathu valadhu valadu', 'दाएं दायें दाएँ दाये ಬಲಕ್ಕೆ ಬಲಗಡೆ வலது வலதுபுறம்');
-const STRAIGHT = set('straight straightah straighta straightaa seedha seedhe sidha sidhe nera nere neraga nerah neraa', 'सीधा सीधे ನೇರ நேரா');
-const PASS = set('past after baad datti dati daati thandi thaandi tandi paar crossing', 'बाद पार ದಾಟಿ தாண்டி');
-const ROAD = { lane: 'lane', gali: 'lane', galli: 'lane', गली: 'lane', cross: 'cross', road: 'road', rasta: 'road', raasta: 'road', street: 'street', theru: 'street', therு: 'street', தெரு: 'street', beedi: 'street', ರಸ್ತೆ: 'road', turn: 'turn', mod: 'turn', main: 'main' };
+const LEFT = set('left baayen baayein bayen baaye baye baen baayan baya baayi edakke edakkey edagade edakke idathu idadhu idadu idathu idathottu idathottekku idathekku', 'बाएं बायें बाएँ बाये ಎಡಕ್ಕೆ ಎಡಗಡೆ இடது இடதுபுறம்');
+const RIGHT = set('right daayen daayein dayen daaye daye daen daahine dahine balakke balakkey balagade valathu valadhu valadu valathottu valathottekku valathekku', 'दाएं दायें दाएँ दाये ಬಲಕ್ಕೆ ಬಲಗಡೆ வலது வலதுபுறம்');
+const STRAIGHT = set('straight straightah straighta straightaa strait straite stret seedha seedhe sidha sidhe nera nere neraga nerah neraa nerey neere', 'सीधा सीधे ನೇರ நேரா');
+const PASS = set('past after baad datti dati daati thandi thaandi tandi paar crossing kazhinju kazhinjal kadandhu kadanthu', 'बाद पार ದಾಟಿ தாண்டி');
+// Speech engines and quick typing spell turns many ways: "righu", "rite", "leftu", "rightla", "lef".
+// Tamil/Kannada/Malayalam suffixes (-u, -la, -le, -ku, -ah, -tu) stick to the English word.
+const LEFT_SPELL = /^(?:left|lef|leff|lept|laft|lft|lfet|leftt)(?:u|a|aa|ah|la|le|lu|ku|ke|e|ae|tu|ttu|side)?$/;
+const RIGHT_SPELL = /^(?:right|righ|rite|ryt|rait|raight|rigt|riht|rhight|righth|rightt)(?:u|a|aa|ah|la|le|lu|ku|ke|e|ae|tu|ttu|side)?$/;
+const STRAIGHT_SPELL = /^(?:straight|strait|stret|streat|stright)(?:u|a|aa|ah|la|e)?$/;
+const ROAD = { lane: 'lane', gali: 'lane', galli: 'lane', गली: 'lane', cross: 'cross', road: 'road', rasta: 'road', raasta: 'road', street: 'street', theru: 'street', theruvula: 'street', theruvil: 'street', vazhi: 'road', roadu: 'road', rasthe: 'road', therு: 'street', தெரு: 'street', beedi: 'street', ರಸ್ತೆ: 'road', turn: 'turn', mod: 'turn', main: 'main' };
 const ORD = {
-  1: set('first 1st pehli pehla pehle pahli modala modalane modalne mudhal mudal mudalavathu', 'पहली पहला ಮೊದಲ ಮೊದಲನೇ முதல்'),
-  2: set('second 2nd doosri doosra dusri dusra doosre eradane erdane eradu rendavathu randavathu irandavathu', 'दूसरी दूसरा ಎರಡನೇ இரண்டாவது'),
-  3: set('third 3rd teesri teesra tisri mooraneya muraneya moonavathu munavathu', 'तीसरी तीसरा ಮೂರನೇ மூன்றாவது'),
-  4: set('fourth 4th chauthi chautha nalkaneya naalavathu', 'चौथी चौथा ನಾಲ್ಕನೇ நான்காவது'),
+  1: set('first frist firts 1st pehli pehla pehle pahli modala modalane modalne mudhal mudal mudalavathu onnamathe onnaamathe', 'पहली पहला ಮೊದಲ ಮೊದಲನೇ முதல்'),
+  2: set('second secund secnd sekand sekend seccond 2nd doosri doosra dusri dusra doosre eradane erdane eradu rendavathu randavathu irandavathu rendavadhu rendaavathu rendam randamathe randaamathe randamathu', 'दूसरी दूसरा ಎರಡನೇ இரண்டாவது'),
+  3: set('third thrid therd tird 3rd teesri teesra tisri mooraneya muraneya moonavathu munavathu moonaavathu moonnamathe munnamathe', 'तीसरी तीसरा ಮೂರನೇ மூன்றாவது'),
+  4: set('fourth forth 4th chauthi chautha nalkaneya naalavathu naalaavathu nalamathe naalamathe', 'चौथी चौथा ನಾಲ್ಕನೇ நான்காவது'),
 };
 const FLOOR = set('floor manzil manjil maala mala majale mahadi maadi', 'मंजिल मंज़िल माला ಮಹಡಿ மாடி');
 const GROUND = set('ground neeche');
@@ -29,11 +34,11 @@ const REL_PRE = { opposite: 'opposite', facing: 'opposite', front: 'opposite', n
 const REL_POST = {
   // spellings speech engines produce: samni, saamney, edhire, pakathula, kitta…
   samni: 'opposite', saamni: 'opposite', samney: 'opposite', saamney: 'opposite', samnay: 'opposite', saamnay: 'opposite', samaney: 'opposite', samnae: 'opposite', edhire: 'opposite', edhir: 'opposite', ethirla: 'opposite', edhirla: 'opposite', munnadi: 'opposite', mundhe: 'opposite', munde: 'opposite',
-  pakathula: 'next_to', pakkathile: 'next_to', pakathile: 'next_to', pakkatula: 'next_to', pakkathla: 'next_to', pakathla: 'next_to', bajju: 'next_to', bazu: 'next_to', kitta: 'near', kitte: 'near', kittae: 'near', nazdeek: 'near', hattira: 'near', hathira: 'near', adutha: 'next_to', saamne: 'opposite', samne: 'opposite', saamane: 'opposite', samane: 'opposite', सामने: 'opposite', edurige: 'opposite', eduru: 'opposite', ಎದುರು: 'opposite', ಎದುರಿಗೆ: 'opposite', ethire: 'opposite', ethirey: 'opposite', ethir: 'opposite', எதிரே: 'opposite', எதிர்: 'opposite', bagal: 'next_to', baazu: 'next_to', paas: 'near', पास: 'near', बगल: 'next_to', pakka: 'next_to', pakkada: 'next_to', ಪಕ್ಕ: 'next_to', pakkathula: 'next_to', pakkam: 'next_to', பக்கத்தில்: 'next_to', peeche: 'behind', hinde: 'behind', pinnadi: 'behind' };
+  pakathula: 'next_to', pakkathile: 'next_to', pakathile: 'next_to', pakkatula: 'next_to', pakkathla: 'next_to', pakathla: 'next_to', bajju: 'next_to', bazu: 'next_to', kitta: 'near', kitte: 'near', kittae: 'near', nazdeek: 'near', hattira: 'near', hathira: 'near', adutha: 'next_to', saamne: 'opposite', samne: 'opposite', saamane: 'opposite', samane: 'opposite', सामने: 'opposite', edurige: 'opposite', eduru: 'opposite', ಎದುರು: 'opposite', ಎದುರಿಗೆ: 'opposite', ethire: 'opposite', ethirey: 'opposite', ethir: 'opposite', எதிரே: 'opposite', எதிர்: 'opposite', bagal: 'next_to', baazu: 'next_to', paas: 'near', पास: 'near', बगल: 'next_to', pakka: 'next_to', pakkada: 'next_to', ಪಕ್ಕ: 'next_to', pakkathula: 'next_to', pakkam: 'next_to', பக்கத்தில்: 'next_to', peeche: 'behind', hinde: 'behind', pinnadi: 'behind', munpil: 'opposite', ethirvasham: 'opposite', arikil: 'near', aduthu: 'near', pinnil: 'behind' };
 
 const COLOUR = {
-  blue: 'blue neela neeli neele neel nila neelam neeli', red: 'red laal lal kempu sivappu sigappu', green: 'green hara hari hare hasiru pachai pacha',
-  yellow: 'yellow peela peeli pila haladi manjal', white: 'white safed safedh bili bilee vellai', black: 'black kaala kala kaali kappu karuppu',
+  blue: 'blue neela neeli neele neel nila neelam neeli', red: 'red laal lal kempu sivappu sigappu chuvanna chuvappu', green: 'green hara hari hare hasiru pachai pacha',
+  yellow: 'yellow peela peeli pila haladi manjal manja', white: 'white safed safedh bili bilee vellai vella vellaya', black: 'black kaala kala kaali kappu karuppu karutha',
   orange: 'orange narangi kesari', pink: 'pink gulabi', brown: 'brown bhura kandu', grey: 'grey gray',
 };
 export const COLOUR_OF = {};
@@ -42,7 +47,7 @@ Object.assign(COLOUR_OF, { नीला: 'blue', नीले: 'blue', लाल
 
 // Landmark type -> words that name it in speech, and words likely painted on its signboard.
 export const LANDMARKS = {
-  temple: ['temple mandir mandira devasthana devasthanam devastana gudi kovil koil मंदिर ದೇವಸ್ಥಾನ ಗುಡಿ கோவில்', 'TEMPLE MANDIR DEVASTHANA KOVIL'],
+  temple: ['temple mandir mandira devasthana devasthanam devastana gudi kovil koil ambalam kshetram मंदिर ದೇವಸ್ಥಾನ ಗುಡಿ கோவில்', 'TEMPLE MANDIR DEVASTHANA KOVIL'],
   mosque: ['masjid mosque', 'MASJID MOSQUE'],
   church: ['church', 'CHURCH'],
   pharmacy: ['pharmacy medical medicals chemist dawakhana', 'PHARMACY MEDICAL MEDICALS CHEMIST'],
@@ -50,7 +55,7 @@ export const LANDMARKS = {
   school: ['school', 'SCHOOL'], college: ['college', 'COLLEGE'],
   bank: ['bank', 'BANK'], atm: ['atm', 'ATM'],
   petrol: ['petrol pump bunk', 'PETROL BUNK PUMP FUEL'],
-  store: ['store stores shop dukaan dukan angadi kadai mart supermarket kirana', 'STORES STORE SHOP MART'],
+  store: ['store stores shop dukaan dukan angadi kadai kada mart supermarket kirana', 'STORES STORE SHOP MART'],
   bakery: ['bakery bakers', 'BAKERY BAKERS'],
   restaurant: ['hotel restaurant darshini bhavan cafe dhaba', 'HOTEL RESTAURANT DARSHINI BHAVAN CAFE'],
   park: ['park maidan', 'PARK'],
@@ -70,13 +75,15 @@ export const TYPE_OF = {};
 for (const [t, [spoken]] of Object.entries(LANDMARKS)) for (const w of W(spoken)) TYPE_OF[w] = t;
 export const BRANDS = { medplus: ['pharmacy', 'MedPlus'], apollo: ['pharmacy', 'Apollo'], dmart: ['store', 'DMart'], reliance: ['store', 'Reliance'], bigbazaar: ['store', 'Big Bazaar'], iqoo: ['sign', 'iQOO'], vivo: ['sign', 'vivo'], hp: ['petrol', 'HP'], kfc: ['restaurant', 'KFC'], dominos: ['restaurant', 'Dominos'] };
 
-const WALA = set('wala wali wale waala waali waale with');
+// Words pointing back to the place just named ("adhuku pakkathula" = next to that one).
+const ANAPHORA = set('adhuku adhukku athuku athukku adhu athu adhoda athoda uske iske uska iska adara adakke athinte athinu its');
+const WALA = set('wala wali wale waala waali waale with ulla irukkura irukkira irukura irora iruva');
 const HONORIFIC = set('sri shri shree sree');
 const STOP = set('the a an of to at on in is it go come take then and from main ke ki ka se mein me mai pe par wala wali wale ko le alli inda la le ge ige ali na also near this that your my his her their there here only just road see look find dekho dekhiye dekh nodi paaru paarunga area place station stand junction');
 // Generic words that are never a landmark's proper name.
 export const GENERIC = set('main road cross street lane gali area place side corner medical shop store building the');
 // Turn verbs that follow "left/right" in code-mixed speech ("left cut pannu", "right lo", "baayen mudo").
-const TURN_TAILS = 'cut|turn|take|pannu|panni|pannunga|edu|edunga|mudo|mudiye|mud|lo|le|lijiye|thirumbu|thirumbunga|tirugi|thirugi|ho|hogi|po|poi|ponga';
+const TURN_TAILS = 'cut|turn|take|mudna|mudne|mudke|mudkar|pannu|panni|pannunga|pannitu|edu|edunga|eduthu|eduthutu|eduthittu|eduthuttu|mudo|mudiye|mud|lo|le|lena|lijiye|thirumbu|thirumbunga|thirumbi|thirumbitu|tirugi|thirugi|togoli|togo|tagoli|thirinju|thiriyuka|thiriyu|ho|hogi|po|poi|ponga|poonga|poitu';
 const TURN_WORD = '(?:left|right|baayen|baaye|bayen|daayen|daaye|dayen|edakke|balakke|idathu|valathu|idathottu|valathottu)';
 // Split after every turn (and its verb: "left cut pannu", "right lo") so one breath with two turns gives two steps.
 const TURN_SPLIT = new RegExp(String.raw`(?<=\b${TURN_WORD}\b(?:\s+(?:${TURN_TAILS}))*)\s+(?!(?:${TURN_TAILS})\b)`, 'i');
@@ -90,7 +97,15 @@ const LANG_HINTS = {
 };
 
 function normalise(text) {
-  return normaliseNative(text).replace(/[’']/g, '').replace(/(\d)\s*(st|nd|rd|th)\b/gi, '$1$2').replace(/\s+/g, ' ').trim();
+  return normaliseNative(text).replace(/[’']/g, '').replace(/(\d)\s*(st|nd|rd|th)\b/gi, '$1$2')
+    // Hindi hands: "ulte haath" = left, "seedhe haath" = right (not "straight")
+    .replace(/\b(?:ulte|ulta|ulti|baayein|baayen|bayen|baaye)\s+(?:haath|hath|hat|taraf|side)\b/gi, 'left')
+    .replace(/\b(?:seedhe|sidhe|seedha|sidha|daayein|daayen|dayen|daaye)\s+(?:haath|hath|hat|taraf)\b/gi, 'right')
+    // speech spellings of left / right / straight ("righu", "rite", "leftu", "rightla", "straightaa")
+    .replace(/[\p{L}]+/gu, (w) => { const l = w.toLowerCase(); return LEFT_SPELL.test(l) ? 'left' : RIGHT_SPELL.test(l) ? 'right' : STRAIGHT_SPELL.test(l) ? 'straight' : w; })
+    // "left side", "இடது பக்கம்" (left + side word): just the turn
+    .replace(/\b(left|right)\s+(?:side|bagal|pakkam|pakka|taraf|bhag|vasham|bhaagakke)\b/gi, '$1')
+    .replace(/\s+/g, ' ').trim();
 }
 
 function tokens(clause) {
@@ -122,7 +137,12 @@ const VERBS = set(`walk walking go going come coming take turn turning see look 
   hi hii hiii hai helo how what why who whom whose when which doing done fine good great nice morning afternoon evening night
   today tomorrow yesterday now later sorry yes yeah no not namaste namaskar namaskara vanakkam kaise kaisa kaisi kya kyun aap tum
   mera meri tera teri hum enna epdi eppadi eppudi nalla nallaa sari seri hegiddira hegidiya chennagide sukhamano entha evide time
-  call calling hear hearing listen test testing mic voice something anything nothing everything thing`);
+  call calling hear hearing listen test testing mic voice something anything nothing everything thing
+  eduthu eduthutu eduthittu eduthuttu edukkanum edunga thirumbi thirumbitu thirumbanum poonga pongo poitu poyittu irundhu irunthu
+  angae angey ingae oru onnu wahi wohi yahi aake aakar jaake jakar jaakar aage aagey seedhe togoli togo tagoli thago madi
+  poyi poyal thirinju thiriyuka thiriyu cheyyu cheythu cheyth inte nte nde ude ulla kku kke ku venam vendam pannitu panniko
+  kitta irunthu varum varu vandhu vanthu chalke chal lekar le_lo jayiye lena lene mudna mudne mudni mudke mudkar mudiyega muda
+  chalna jaana jaake jake adhuku adhukku athuku athukku adhu athu adhoda athoda uske iske uska iska adara adakke athinte athinu its`);
 
 // Everyday objects the on-device vision model (COCO classes) can see, by the words people use for them.
 export const OBJECTS = {
@@ -136,7 +156,7 @@ export const OBJECTS = {
   toilet: 'toilet', bed: 'bed', vase: 'vase', dog: 'dog', cat: 'cat', signal: 'traffic light', hydrant: 'fire hydrant',
 };
 
-const isLexical = (w) => LEFT.has(w) || RIGHT.has(w) || STRAIGHT.has(w) || PASS.has(w) || w in ROAD || FLOOR.has(w) ||
+const isLexical = (w) => LEFT.has(w) || RIGHT.has(w) || STRAIGHT.has(w) || PASS.has(w) || w in ROAD || FLOOR.has(w) || GROUND.has(w) ||
   w in COLOUR_OF || w in TYPE_OF || w in REL_PRE || w in REL_POST || Object.values(ORD).some((s) => s.has(w));
 
 // Words just before a landmark word that look like its proper name ("Sri Ganesha" Temple, "Registration" desk).
@@ -166,6 +186,7 @@ function findLandmarks(toks) {
       if (w === 'bus' && toks[i + 1]?.w === 'stop') i++;
       else if (w === 'stop') continue;
       const prev = found.at(-1);
+      if (type === 'store' && prev?.end === i - 1 && prev.type !== 'store') { prev.end = i; continue; }
       if ((type === 'sign' || type === 'desk') && prev?.end === i - 1) {
         // "EXIT sign", "iQOO banner": the sign word belongs to the landmark before it.
         prev.end = i;
@@ -187,7 +208,10 @@ function findLandmarks(toks) {
   for (let k = found.length - 1; k > 0; k--) {
     const a = found[k - 1], b = found[k];
     const between = toks.slice(a.end + 1, b.i).map((t) => t.w);
-    if (between.length && between.every((w) => WALA.has(w))) { a.end = b.end; found.splice(k, 1); }
+    // also "the house with the red gate": wala/with plus articles and colours in between
+    if (!between.some((w) => WALA.has(w)) || !between.every((w) => WALA.has(w) || ['the', 'a', 'an'].includes(w) || w in COLOUR_OF)) continue;
+    if (b.type === 'gate' && ['house', 'door', 'apartment'].includes(a.type)) found.splice(k - 1, 1); // keep the gate
+    else { a.end = b.end; found.splice(k, 1); }
   }
   for (const lm of found) if (!lm.name) lm.name = nameBefore(toks, lm.i);
   // Anything else that looks like a noun phrase is a landmark too ("the coffee machine", "Remote PC", "black chair"):
@@ -199,7 +223,8 @@ function findLandmarks(toks) {
     for (let j = lm.i - 1; j >= Math.max(0, lm.i - 4); j--) if (nameWords.has(toks[j].w) || HONORIFIC.has(toks[j].w)) used.add(j);
   }
   const hint = (w) => Object.values(LANG_HINTS).some((s) => s.has(w));
-  const content = (j) => !used.has(j) && /^[\p{L}\p{M}]{3,}$/u.test(toks[j].raw) && !STOP.has(toks[j].w) && !isLexical(toks[j].w) &&
+  // (Latin letters only: unknown native-script words are mostly verb forms, not places.)
+  const content = (j) => !used.has(j) && /^\p{Script=Latin}{3,}$/u.test(toks[j].raw) &&!STOP.has(toks[j].w) && !isLexical(toks[j].w) &&
     !VERBS.has(toks[j].w) && !HONORIFIC.has(toks[j].w) && !WALA.has(toks[j].w) && !hint(toks[j].w);
   for (let j = 0; j < toks.length; j++) {
     if (!content(j)) continue;
@@ -235,6 +260,23 @@ export function routeWords(text) {
 const checkable = (lm) => !!lm && (lm.type !== 'other' || !!lm.colour || W((lm.name || '').toLowerCase()).some(routeWord));
 export function isRoute(g) {
   return !!g?.steps?.some((s) => s.kind === 'turn' || checkable(s.landmark) || checkable(s.ref?.landmark));
+}
+// Words of the note the rule engine has no meaning for (not route vocabulary, filler, or a landmark name it used).
+// None left = the rules read the whole note, so their route is exact; otherwise the on-device model helps.
+export function unknownWords(note, graph = parseRules(note)) {
+  const names = new Set();
+  for (const s of graph.steps) for (const l of [s.landmark, s.ref?.landmark]) for (const w of W((l?.name || '').toLowerCase())) names.add(w);
+  const hint = (w) => Object.values(LANG_HINTS).some((x) => x.has(w));
+  const joiners = set('then phir fir amele aamele appuram apparam apram piragu aprm after that');
+  return tokens(normalise(note || '')).map((t) => t.w.replace(/[.,;!?।]+/g, '')).filter(Boolean).filter((w) => !(joiners.has(w) || routeWord(w) || VERBS.has(w) || STOP.has(w) || WALA.has(w) ||
+    HONORIFIC.has(w) || ANAPHORA.has(w) || hint(w) || names.has(w) || /^d/.test(w) || ['ah', 'a', 'la', 'le', 'na'].includes(w)));
+}
+// Shop-like types are easily swapped when translating ("medicine shop" / "pharmacy"): one family.
+const FAMILY = { pharmacy: 'shop', store: 'shop', bakery: 'shop', restaurant: 'shop', hospital: 'care', school: 'edu', college: 'edu', gate: 'gate', door: 'gate', house: 'home', apartment: 'home' };
+export function typeOrFamilySaid(note, type) {
+  if (typeSaid(note, type)) return true;
+  const f = FAMILY[type];
+  return !!f && Object.entries(FAMILY).some(([t, g]) => g === f && typeSaid(note, t));
 }
 // Was a landmark of this type actually mentioned (any language word or brand for it)?
 export function typeSaid(note, type) {
@@ -317,6 +359,8 @@ export function parseRules(input) {
   const graph = { floor: null, lang: detectLang(input), parser: 'rules', steps: [] };
   const push = (s) => graph.steps.push(s);
 
+  let turnClause = false; // the previous clause ended with a turn
+  let pendingRef = null;  // "opposite the bus stop," waiting for the place it describes
   const clauses = text.split(SPLIT).filter((c) => c && c.trim()).flatMap((c) => c.split(TURN_SPLIT));
   for (const clause of clauses.filter((c) => c && c.trim())) {
     const a = analyse(clause);
@@ -329,15 +373,38 @@ export function parseRules(input) {
       const atWord = (lm) => ['at', 'near', 'from', 'after', 'by', 'beside'].includes(a.toks[lm.i - 1]?.w) || ['at', 'near', 'by'].includes(a.toks[lm.i - 2]?.w);
       const before = lms.filter((lm) => lm.i < turnAt || atWord(lm) || (a.passAt >= 0 && a.passAt > turnAt && lm.i < a.passAt));
       for (const lm of before) push({ kind: 'pass', landmark: landmarkOut(lm) });
+      if (pendingRef) { push({ kind: 'pass', landmark: pendingRef.landmark }); pendingRef = null; }
       push({ kind: 'turn', turn: a.turn, ordinal: a.ordinal || 1, road: a.road });
       // "turn right, see the Remote PC text": landmarks after the turn come after it.
       for (const lm of lms) if (!before.includes(lm)) push({ kind: 'pass', landmark: landmarkOut(lm) });
+      turnClause = graph.steps.at(-1)?.kind === 'turn';
       continue;
     }
-    if (!lms.length) continue; // "go straight from the main road", floor-only clauses, filler
+    const afterTurn = turnClause;
+    turnClause = false;
+    if (!lms.length) continue;
+    if (afterTurn && lms.length === 1 && !a.rel && ['at', 'after', 'past', 'by', 'from'].includes(a.toks[0]?.w)) {
+      graph.steps.splice(graph.steps.length - 1, 0, { kind: 'pass', landmark: landmarkOut(lms[0]) });
+      continue;
+    }
+    const prev = graph.steps.at(-1);
+    // "hospital ethire oru kadai, adhuku pakkathula veedu": "adhuku / uske / its" points back to the place just named.
+    if (a.rel && lms.length === 1 && prev?.landmark && a.toks.some((t) => ANAPHORA.has(t.w))) {
+      push({ kind: 'arrive', landmark: landmarkOut(lms[0]), ref: { relation: a.rel.relation, landmark: prev.landmark } });
+      continue;
+    }
+    // "opposite the bus stop, green shop": the relation is said first, the place in the next clause.
+    if (a.rel && !a.rel.post && lms.length === 1 && lms[0].i > a.rel.at && (!prev || prev.kind === 'turn')) {
+      pendingRef = { relation: a.rel.relation, landmark: landmarkOut(lms[0]) };
+      continue;
+    }
+    if (pendingRef && lms.length === 1 && !a.rel) {
+      push({ kind: 'arrive', landmark: landmarkOut(lms[0]), ref: pendingRef });
+      pendingRef = null;
+      continue;
+    }
 
     // ", SBI bank ke bagal mein": a relation-only clause describes the place just named.
-    const prev = graph.steps.at(-1);
     if (a.rel && lms.length === 1 && prev && prev.kind !== 'turn' && !prev.ref) {
       prev.kind = 'arrive';
       prev.ref = { relation: a.rel.relation, landmark: landmarkOut(lms[0]) };
@@ -355,6 +422,7 @@ export function parseRules(input) {
     for (const lm of lms) push({ kind: 'pass', landmark: landmarkOut(lm) });
   }
 
+  if (pendingRef) push({ kind: 'pass', landmark: pendingRef.landmark });
   const last = graph.steps.at(-1);
   if (last && last.kind === 'pass') last.kind = 'arrive';
   if (!graph.steps.some((s) => s.kind === 'arrive')) push({ kind: 'arrive', landmark: null, ref: null });

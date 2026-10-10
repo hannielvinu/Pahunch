@@ -58,7 +58,7 @@ bash tools/start.sh             # LLM :8081, speech :8082/:8083, app :8080
 Open `http://localhost:8080` in Chrome (localhost is a secure context: camera, mic, sensors, vibration work).
 
 ## Tests and evaluation
-- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs` · `node tests/understanding.test.mjs` (chat, injection, invented landmarks, with a stand-in llama-server)
+- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs` · `node tests/understanding.test.mjs` (chat, injection, invented landmarks, with a stand-in llama-server) · `node tests/languages.test.mjs` + `node tests/heldout.test.mjs` (70 routes across English, Hindi, Tamil, Kannada, Malayalam in native script, romanised and mixed)
 - `node tools/eval-llm.mjs`: on-device LLM accuracy and latency on 7 routes (needs llama-server)
 - `node tools/eval-voice.mjs`: recorded voice samples → speech → route, scored against the intended route
 

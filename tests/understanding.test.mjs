@@ -82,6 +82,28 @@ await check('instructions inside the note do not change the output', async () =>
   assert.equal(res.graph.parser, 'rules'); assert.ok(!res.rewrite);
 });
 
+// ---- The reported case: "nera poi left eduthutu righu" with Gemma inventing a bus stop
+await check('nera poi left eduthutu righu: left then right, nothing invented (AI answer checked)', async () => {
+  const { res } = await plan('nera poi left eduthutu righu', 'go past the bus stop, take the first left, take the second right');
+  assert.equal(res.graph.steps.map(describe).join(' | '), 'Take the 1st turn left | Take the 1st turn right | Arrive: destination');
+});
+await check('auto mode: rules understood every word, so the model is not asked', async () => {
+  answer = 'go past the bus stop, take the first left, take the second right'; asked = 0;
+  const res = await parseNote('nera poi left eduthutu righu', { mode: 'auto' });
+  assert.equal(asked, 0); assert.ok(res.sure);
+  assert.equal(res.graph.steps.map(describe).join(' | '), 'Take the 1st turn left | Take the 1st turn right | Arrive: destination');
+});
+await check('Tamil script: a landmark the AI invented is dropped', async () => {
+  const { res } = await plan('நேரா போய் லெஃப்ட் எடுத்துட்டு ரைட் அந்த வீடு யாரோ', 'go past the Ganesh temple, take the first left, take the first right, then the house');
+  const g = res.graph.steps.map(describe).join(' | ');
+  assert.ok(!/temple/i.test(g), g);
+});
+await check('messy note with unknown words still asks the model', async () => {
+  answer = 'go past the big tree, then the chai stall'; asked = 0;
+  await parseNote('I am near the big tree, you know, the one beside the chai stall where Ramesh sits', { mode: 'auto' });
+  assert.equal(asked, 1);
+});
+
 // ---- Small pieces
 await check('rewriteOk accepts route lines and rejects chat', () => {
   assert.ok(rewriteOk('go past the Ganesh temple, take the second left, then the blue gate'));
