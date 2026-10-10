@@ -141,7 +141,7 @@ The input may be English, Hindi, Tamil, Kannada, Malayalam or a mix, in any scri
 Use only these phrases, joined by commas:
 "go past the <landmark>", "take the first|second|third|fourth left|right", "then the <colour> <landmark> opposite|next to|near the <landmark>", "<number> floor".
 Keep the customer's proper names (temple names, shop names) in English letters. Translate colours and landmark words to English (mandir/kovil = temple, medical = pharmacy, gate, house, shop).
-Leave out filler, warnings and things not to do ("don't go there"). Never add landmarks that were not said. Output only the line.`;
+Keep the starting point as a landmark ("from the bus stop side" = "go past the bus stop"). Leave out filler, warnings and things not to do ("don't go there"). Never add landmarks that were not said. Output only the line.`;
 
 const SHOTS_REWRITE = [
   ['Main road se seedha aao, Ganesh mandir ke baad doosri gali mein baayen mudo, phir MedPlus medical ke saamne neela gate. Doosri manzil.',
@@ -151,7 +151,7 @@ const SHOTS_REWRITE = [
   ['bus stand kitta irundhu straight-ah vaanga, left cut pannunga, Apollo pharmacy pakkathula manjal veedu',
     'go past the bus stand, take the first left, then the yellow house next to the Apollo pharmacy'],
   ['ok so u come from the metro side, theres a big Reliance store, dont go inside, take the third right after it, our house is the white one in front of the park, 2nd floor',
-    'go past the Reliance store, take the third right, then the white house opposite the park, second floor'],
+    'go past the metro station, go past the Reliance store, take the third right, then the white house opposite the park, second floor'],
   ['walk to the registration desk, then left at the coffee machine and you will see the black chair near the stage',
     'go past the registration desk, go past the coffee machine, take the first left, then the black chair near the stage'],
 ];

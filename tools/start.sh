@@ -22,7 +22,7 @@ if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
   STARTED=""
   # Try the Adreno GPU (OpenCL) build first if it exists (GPU=0 skips it); fall back to the CPU build.
   # The vendor library path is set for this one process only.
-  if [ "${GPU:-1}" = "1" ] && [ -x "$GPU_BIN" ]; then
+  if [ "${GPU:-0}" = "1" ] && [ -x "$GPU_BIN" ]; then  # off by default: the OpenCL build crashes on this phone (GPU=1 to retry)
     LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64" "$GPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t ${LLAMA_THREADS:-6} -ngl 99 > llama.log 2>&1 &
     LLAMA=$!
     echo "On-device LLM starting on the Adreno GPU (OpenCL)…"
