@@ -23,14 +23,14 @@ if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
   # Try the Adreno GPU (OpenCL) build first if it exists (GPU=0 skips it); fall back to the CPU build.
   # The vendor library path is set for this one process only.
   if [ "${GPU:-1}" = "1" ] && [ -x "$GPU_BIN" ]; then
-    LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64" "$GPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 -ngl 99 > llama.log 2>&1 &
+    LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64" "$GPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t ${LLAMA_THREADS:-6} -ngl 99 > llama.log 2>&1 &
     LLAMA=$!
     echo "On-device LLM starting on the Adreno GPU (OpenCL)…"
     if wait_llm 30; then STARTED=gpu; else echo "GPU build did not start (see llama.log); using CPU."; kill "$LLAMA" 2>/dev/null; cp llama.log llama-gpu.log 2>/dev/null; fi
   fi
   if [ -z "$STARTED" ] && [ -n "$CPU_BIN" ]; then
     # -t 4: CPU threads; -c 2048: prompt + few-shot examples.
-    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
+    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t ${LLAMA_THREADS:-6} > llama.log 2>&1 &
     LLAMA=$!
     echo "On-device LLM starting on the CPU (pid $LLAMA, log: llama.log)…"
     wait_llm 60 && STARTED=cpu
@@ -41,7 +41,7 @@ if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
     echo "Could not load $MODEL (see llama-model.log); falling back to Qwen2.5-1.5B."
     cp llama.log llama-model.log 2>/dev/null
     MODEL=$FALLBACK
-    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
+    "$CPU_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t ${LLAMA_THREADS:-6} > llama.log 2>&1 &
     LLAMA=$!
     wait_llm 60 && STARTED="cpu, Qwen2.5-1.5B"
   fi
