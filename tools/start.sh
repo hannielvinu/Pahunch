@@ -12,10 +12,19 @@ if [ -z "${MODEL:-}" ]; then
 fi
 echo "Model: $MODEL"
 
-if [ -f "$MODEL" ] && command -v llama-server >/dev/null; then
+# Prefer the llama.cpp built with the Adreno GPU (OpenCL) backend (tools/lunch-setup.sh); GPU=0 forces CPU.
+LLAMA_BIN=$(command -v llama-server)
+GPU_ARGS=""
+if [ "${GPU:-1}" = "1" ] && [ -x "$HOME/llama.cpp/build/bin/llama-server" ]; then
+  LLAMA_BIN="$HOME/llama.cpp/build/bin/llama-server"
+  GPU_ARGS="-ngl 99"
+  export LD_LIBRARY_PATH="/vendor/lib64:/system/vendor/lib64:${LD_LIBRARY_PATH:-}"  # Adreno libOpenCL.so
+  echo "Using llama.cpp with the Adreno GPU (OpenCL) backend"
+fi
+if [ -f "$MODEL" ] && [ -n "$LLAMA_BIN" ]; then
   pkill -f llama-server 2>/dev/null
-  # -t 4: llama.cpp CPU threads; -c 2048: enough for the prompt + few-shot examples.
-  llama-server -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 > llama.log 2>&1 &
+  # -t 4: CPU threads; -c 2048: prompt + few-shot examples; -ngl 99: all layers on the GPU (OpenCL build only).
+  "$LLAMA_BIN" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t 4 $GPU_ARGS > llama.log 2>&1 &
   LLAMA=$!
   echo "On-device LLM starting (pid $LLAMA, log: llama.log)…"
   for i in $(seq 1 60); do curl -s localhost:8081/health | grep -q ok && { echo "On-device LLM ready."; break; }; sleep 1; done
