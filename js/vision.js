@@ -72,6 +72,21 @@ const COLOUR_TEST = {
   grey: (h, s, v) => s < 0.12 && v >= 0.3 && v <= 0.75,
 };
 
+// White balance for warm venue lights / blue shade, estimated from pixels that are probably neutral (walls,
+// road, sky: bright and low in saturation) and clamped. Plain grey-world would treat a big blue gate filling
+// the frame as a colour cast and cancel it: the closer the rider got, the less blue the gate looked.
+export function whiteBalance(data) {
+  let sr = 0, sg = 0, sb = 0, n = 0, all = 0;
+  for (let k = 0; k < data.length; k += 16) {
+    const r = data[k], g = data[k + 1], b = data[k + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    all++;
+    if (mx > 90 && mx - mn < 0.35 * mx) { sr += r; sg += g; sb += b; n++; }
+  }
+  if (n < all * 0.04) return [1, 1, 1]; // nothing neutral in view: leave the colours alone
+  const avg = (sr + sg + sb) / 3, c = (x) => Math.min(1.3, Math.max(0.77, avg / (x || 1)));
+  return [c(sr), c(sg), c(sb)];
+}
+
 // Pixel mask of `colour` (for the live overlay), its share per third, and mean brightness (low light → torch).
 export function colourScan(imageData, colour) {
   const test = COLOUR_TEST[colour];
@@ -79,10 +94,7 @@ export function colourScan(imageData, colour) {
   const mask = new ImageData(width, height);
   const hits = [0, 0, 0], totals = [0, 0, 0];
   let light = 0;
-  // Grey-world white balance: warm venue lights / blue shade otherwise shift every hue.
-  let sr = 0, sg = 0, sb = 0;
-  for (let k = 0; k < data.length; k += 16) { sr += data[k]; sg += data[k + 1]; sb += data[k + 2]; }
-  const avg = (sr + sg + sb) / 3 || 1, gr = avg / (sr || 1), gg = avg / (sg || 1), gb = avg / (sb || 1);
+  const [gr, gg, gb] = whiteBalance(data);
   const cap = (x) => (x > 255 ? 255 : x);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -159,7 +171,8 @@ export class Vision {
     });
     await this.worker.setParameters({
       tessedit_pageseg_mode: '11', // sparse text: signs scattered in a scene
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&', // signs, not noise
+      // English only: Latin letters (signs, not noise). With an Indian script loaded, no whitelist.
+      tessedit_char_whitelist: langs === 'eng' ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&' : '',
     });
     this.langs = langs;
     this.ocrLoadMs = Math.round(performance.now() - t0);
@@ -194,14 +207,21 @@ export class Vision {
     try { await track.applyConstraints({ advanced: [{ torch: on }] }); this.torch = on; return true; } catch { return false; }
   }
 
-  // Grayscale + contrast stretch: signboards read far better than from the raw colour frame.
-  enhance(ctx, W, H) {
+  // Grayscale + contrast stretch (2nd–98th percentile, so one bright sky or dark shadow doesn't flatten the sign).
+  // invert: white letters on a dark board (most Indian shop signs) become dark on light, which OCR reads best.
+  enhance(ctx, W, H, invert = false) {
     const img = ctx.getImageData(0, 0, W, H), d = img.data;
-    let lo = 255, hi = 0;
-    for (let k = 0; k < d.length; k += 16) { const g = (d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10; if (g < lo) lo = g; if (g > hi) hi = g; }
+    const hist = new Uint32Array(256);
+    let n = 0;
+    for (let k = 0; k < d.length; k += 16) { hist[(d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10 | 0]++; n++; }
+    let lo = 0, hi = 255, acc = 0;
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= n * 0.02) { lo = i; break; } }
+    acc = 0;
+    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= n * 0.02) { hi = i; break; } }
     const span = Math.max(40, hi - lo);
     for (let k = 0; k < d.length; k += 4) {
-      const g = Math.max(0, Math.min(255, (((d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10 - lo) * 255) / span));
+      let g = Math.max(0, Math.min(255, (((d[k] * 3 + d[k + 1] * 6 + d[k + 2]) / 10 - lo) * 255) / span));
+      if (invert) g = 255 - g;
       d[k] = d[k + 1] = d[k + 2] = g;
     }
     ctx.putImageData(img, 0, 0);
@@ -211,16 +231,20 @@ export class Vision {
   // boxes: [{ text, tokens, x, y, w, h }] with x/y/w/h as fractions of the camera frame (0..1).
   async read() {
     if (!this.worker || this.ocrBusy) return null;
-    // Read the centre of the view (where the reticle is), enlarged: signs come out bigger and OCR is faster.
+    // Each read looks at the scene a different way, in turn: the wide centre, the same inverted (light text on
+    // dark boards), and a 2x zoom on the middle (signs far down the lane). Words seen in the last few reads are
+    // kept, so a sign doesn't have to be read in one single frame.
     const v = this.video;
     if (!v.videoWidth) return null;
-    const C = { x: 0.06, y: 0.1, w: 0.88, h: 0.7 };
+    const VIEWS = [{ x: 0.06, y: 0.1, w: 0.88, h: 0.7 }, { x: 0.06, y: 0.1, w: 0.88, h: 0.7, invert: true }, { x: 0.25, y: 0.25, w: 0.5, h: 0.42 }];
+    this.view = ((this.view ?? -1) + 1) % VIEWS.length;
+    const C = VIEWS[this.view];
     const sw = v.videoWidth * C.w, sh = v.videoHeight * C.h;
     this.big.width = 1280;
     this.big.height = Math.round((1280 * sh) / sw);
     const ctx = this.big.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(v, v.videoWidth * C.x, v.videoHeight * C.y, sw, sh, 0, 0, this.big.width, this.big.height);
-    this.enhance(ctx, this.big.width, this.big.height);
+    this.enhance(ctx, this.big.width, this.big.height, C.invert);
     this.ocrBusy = true;
     const t0 = performance.now();
     try {
@@ -234,9 +258,19 @@ export class Vision {
         boxes.push({ text: tokens.join(' '), tokens, x: C.x + (b.x0 / W) * C.w, y: C.y + (b.y0 / H) * C.h, w: ((b.x1 - b.x0) / W) * C.w, h: ((b.y1 - b.y0) / H) * C.h });
       }
       this.lastOcrMs = Math.round(performance.now() - t0);
-      return { words: cleanWords(read.map((w) => w.text).join(' ')), boxes, text: data.text, ms: this.lastOcrMs };
+      const now = performance.now(), words = cleanWords(read.map((w) => w.text).join(' '));
+      this.recent = [...(this.recent || []).filter((r) => now - r.at < 3000), { at: now, words }];
+      const seen = [...new Set(this.recent.flatMap((r) => r.words))];
+      return { words: seen, fresh: words, boxes, text: data.text, ms: this.lastOcrMs };
     } finally {
       this.ocrBusy = false;
     }
   }
+}
+
+// OCR languages for a route: English, plus Hindi / Tamil / Kannada when a landmark name is written in that script.
+export function ocrLangs(graph) {
+  const names = (graph?.steps || []).flatMap((st) => [st.landmark?.name, st.ref?.landmark?.name]).filter(Boolean).join(' ');
+  const extra = /[ऀ-ॿ]/.test(names) ? 'hin' : /[஀-௿]/.test(names) ? 'tam' : /[ಀ-೿]/.test(names) ? 'kan' : '';
+  return extra ? `eng+${extra}` : 'eng';
 }

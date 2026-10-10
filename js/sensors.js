@@ -4,6 +4,9 @@
 //   accelerometer (linear) -> walking steps and distance since the last landmark
 //   gravity, rotation vector (absolute orientation), GPS watch, ambient light (sensor or camera brightness)
 // Light, proximity, IR and raw magnetometer have no web API in Chrome by default: reported as "native only".
+import { app, on, appLocation } from './bridge.js';
+
+const FIX_KEY = 'pahunch.lastfix';
 
 export class Sensors {
   constructor() {
@@ -16,6 +19,8 @@ export class Sensors {
     this.lux = null;         // AmbientLightSensor, if exposed
     this.pos = null;         // last GPS fix { lat, lon, acc, at }
     this.gpsError = null;
+    this.lastFix = null;     // last good fix, kept across sessions (indoors / airplane mode: no new fix)
+    try { this.lastFix = JSON.parse(localStorage.getItem(FIX_KEY) || 'null'); } catch {}
     this.avail = {};
     this._lastT = 0;
     this._peak = false;
@@ -47,10 +52,35 @@ export class Sensors {
     this.watchGps();
   }
 
+  // A fix: kept as the live position, and remembered (with the steps walked since) for when GPS goes quiet.
+  _fix(lat, lon, acc, at = Date.now()) {
+    this.pos = { lat, lon, acc: Math.round(acc), at };
+    this.gpsError = null;
+    this.stepsAtFix = this.totalSteps || 0;
+    if (acc <= 100) { this.lastFix = { ...this.pos }; try { localStorage.setItem(FIX_KEY, JSON.stringify(this.lastFix)); } catch {} }
+    this.onFix?.(this.pos);
+  }
+
+  // Best position for the door card: live fix, else the last good fix widened by the distance walked since.
+  estimate(maxAgeMs = 6 * 3600e3) {
+    const p = this.pos && Date.now() - this.pos.at < 60000 ? this.pos : null;
+    if (p) return { ...p, estimated: false };
+    const f = this.lastFix;
+    if (!f || Date.now() - f.at > maxAgeMs) return null;
+    const walked = Math.max(0, ((this.totalSteps || 0) - (this.stepsAtFix || 0)) * 0.7);
+    return { ...f, acc: Math.round(f.acc + walked), estimated: true, ageMin: Math.round((Date.now() - f.at) / 60000) };
+  }
+
   watchGps() {
+    // In the Android app: satellite GPS straight from the phone (works in airplane mode, outdoors).
+    if (app) {
+      const n = appLocation();
+      if (n) this._fix(n.lat, n.lon, n.acc, n.at);
+      on('location', (d) => this._fix(d.lat, d.lon, d.acc, d.at));
+    }
     if (!navigator.geolocation) { this.gpsError = 'no GPS API'; return; }
     navigator.geolocation.clearWatch?.(this._watch);
-    const ok = (p) => { this.pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy), at: Date.now() }; this.gpsError = null; };
+    const ok = (p) => this._fix(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
     const fail = (e) => {
       this.gpsError = e.code === 1 ? 'location permission denied' : e.code === 2 ? 'no GPS signal (indoors?)' : 'GPS timeout';
       // Fall back to network location if high accuracy keeps failing.
@@ -81,7 +111,7 @@ export class Sensors {
       const m = Math.hypot(a.x, a.y, a.z);
       this.accel = m;
       // Step = a peak above 1.6 m/s² after a dip, at most ~3 steps a second.
-      if (m > 1.6 && !this._peak && t - this._lastStep > 330) { this._peak = true; this._lastStep = t; this.steps++; }
+      if (m > 1.6 && !this._peak && t - this._lastStep > 330) { this._peak = true; this._lastStep = t; this.steps++; this.totalSteps = (this.totalSteps || 0) + 1; }
       else if (m < 0.8) this._peak = false;
     }
   }

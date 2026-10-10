@@ -74,6 +74,12 @@
     <div class="hero">
       <h2 id="home-title">Where to?</h2>
       <p id="home-sub" class="meta">Speak or paste the directions exactly as the customer gave them.</p>
+      <p id="voice-pack" class="voice-pack" hidden></p>
+    </div>
+    <div id="job" class="job" hidden>
+      <div class="job-top"><span id="job-src" class="job-src">Partner app</span><span id="job-id" class="job-id"></span></div>
+      <strong id="job-who"></strong>
+      <p class="meta">Last 100 m · the customer's own directions are loaded below</p>
     </div>
     <div class="note-box">
       <textarea id="note" rows="5" placeholder="Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate…"></textarea>
@@ -99,7 +105,7 @@
       <summary id="doors-sum">Saved doors</summary>
       <ul id="doors-list" class="doors"></ul>
     </details>
-    <details id="trials" class="panel">
+    <details id="trials" class="panel dev-only">
       <summary>Field test · with vs without Pahunch</summary>
       <p class="meta">Without: time a volunteer finding the spot from a description + phone calls. With: every Pahunch arrival is timed on its door card.</p>
       <div class="row">
@@ -109,7 +115,7 @@
       <pre id="t-sum"></pre>
       <button id="t-clear" class="link">Clear test data</button>
     </details>
-    <details id="sensors-panel" class="panel">
+    <details id="sensors-panel" class="panel dev-only">
       <summary>Live sensors</summary>
       <pre id="sensors">starting…</pre>
       <button id="selftest" class="btn ghost">Test voice and vibration</button>
@@ -132,7 +138,8 @@
         </select>
       <pre id="device"></pre>
     </div>
-    <button id="demo" class="link">Load demo route</button>
+    <button id="demo" class="link dev-only">Load demo route</button>
+    <a href="partner.html" class="link partner-link">Open the partner app demo (rider · customer · 108)</a>
     <div id="samples" hidden></div>
   </section>
 
@@ -178,7 +185,7 @@
       <p class="meta center">Say "yes" / "haan" or tap</p>
     </div>
     <div class="hud bottom">
-      <div class="meta stats"><span id="det-ms"></span><span id="ocr-ms"></span><span id="heading"></span></div>
+      <div class="meta stats dev-only"><span id="det-ms"></span><span id="ocr-ms"></span><span id="heading"></span></div>
       <div class="row">
         <button id="stop" class="btn ghost icon-btn" aria-label="Stop"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
         <button id="handsfree" class="btn ghost" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg>Hands-free</button>

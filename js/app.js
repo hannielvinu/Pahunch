@@ -1,16 +1,17 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords } from './parser.js';
 import { parseNote, warmNative, complete } from './llm.js';
-import { Vision, matchSigns } from './vision.js';
+import { Vision, matchSigns, ocrLangs } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
 import { say, text, buzz, Compass, unlockSpeech, localName } from './guide.js';
 import { Detector } from './detector.js';
 import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
-import { dictate, CommandListener, voiceAvailable, localSpeechSupported } from './voice.js';
+import { dictate, CommandListener, voiceAvailable, localSpeechSupported, commandOf } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
 import { deviceReport, describeDevice } from './device.js';
+import { app, appListen, engineName, offlinePacks, localeOf } from './bridge.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
 
@@ -308,7 +309,7 @@ function onOcr(res) {
   const m = s.kind === 'turn' ? { hit: null, word: null } : matchSigns(res.words, s.verify);
   const confirms = s.kind === 'pass' && m.hit === 'name';
   overlay.setBoxes(res.boxes, m.word, m.word && `✓ ${m.word} · step ${s.n} ${confirms ? 'confirmed' : 'spotted'}`);
-  renderSeen(res.words, m.word);
+  renderSeen(res.fresh || res.words, m.word);
   if (state.asking || !m.hit) return;
   if (s.kind === 'pass') {
     // A named signboard is strong evidence: confirm. A generic word ("TEMPLE") asks, except in ambulance mode.
@@ -436,9 +437,10 @@ async function startGuide() {
     toast(`Camera unavailable: ${e.message}. Use Skip / Yes to step through.`);
   }
   try { state.wake = await navigator.wakeLock?.request('screen'); } catch {}
-  if (!vision.worker && !LITE) {
+  const langs = ocrLangs(state.graph);
+  if ((!vision.worker || vision.langs !== langs) && !LITE) {
     $('#ocr-ms').textContent = 'loading OCR…';
-    try { await vision.loadOcr('eng'); } catch (e) { toast(`OCR failed: ${e.message}`); }
+    try { await vision.loadOcr(langs); } catch (e) { toast(`OCR failed: ${e.message}`); }
   }
   state.running = true;
   overlay.start();
@@ -457,6 +459,7 @@ function stopGuide() {
   clearTimeout(state.raf);
   clearTimeout(state.detTimer);
   listener.stop();
+  appHands.stop();
   $('#handsfree').setAttribute('aria-pressed', 'false');
   vision.setTorch(false);
   overlay.stop();
@@ -479,6 +482,7 @@ function arrive() {
   say(T().arrived(g.floor), state.lang);
   buzz('arrived');
   state.card = makeCard(g, { secs, lang: state.lang });
+  state.card.photo = doorPhoto();
   saveCard(state.card);
   showCard(state.card, true);
   fixPosition(state.card);
@@ -503,8 +507,8 @@ function renderCard() {
   const c = state.card;
   $('#arrived-what').textContent = c.dest;
   $('#arrived-floor').textContent = c.floor != null ? `Floor ${c.floor === 0 ? 'ground' : c.floor}` : '';
-  $('#card-pin').textContent = c.digipin ? formatDigipin(c.digipin) : state.locating ? 'locating…' : 'no GPS fix';
-  $('#card-acc').textContent = c.digipin ? `±${c.acc ?? '?'} m · ${c.lat}, ${c.lon}` : '';
+  $('#card-pin').textContent = c.digipin ? formatDigipin(c.digipin) : state.locating ? 'locating…' : 'waiting for GPS';
+  $('#card-acc').textContent = c.digipin ? `${c.approx ? 'approx. · last GPS fix + steps walked · ' : ''}±${c.acc ?? '?'} m · ${c.lat}, ${c.lon}` : state.locating ? '' : 'No satellites here (indoors). Fills in by itself when GPS returns.';
   $('#locate').hidden = !!c.digipin || state.locating;
   $('#card-photo').hidden = !c.photo;
   if (c.photo) $('#card-photo').src = c.photo;
@@ -530,15 +534,41 @@ function renderQr(data) {
   }
 }
 
+// Position for the door card. Offline there is no Wi-Fi/cell location, only satellites, which indoors may give
+// nothing: use the live fix, else wait briefly, else the last good fix widened by the distance walked since
+// (marked "approx."), and keep listening: a real fix arriving later replaces it.
 async function fixPosition(card) {
+  const apply = (e) => {
+    setPosition(card, { latitude: e.lat, longitude: e.lon, accuracy: e.acc });
+    card.approx = !!e.estimated;
+    if (loadCards().some((c) => c.id === card.id)) saveCard(card);
+    if (state.card === card) renderCard();
+  };
   state.locating = true;
   renderCard();
-  const live = sensors.pos && Date.now() - sensors.pos.at < 60000 ? { latitude: sensors.pos.lat, longitude: sensors.pos.lon, accuracy: sensors.pos.acc } : null;
-  const pos = live || (await locate());
+  let e = sensors.estimate();
+  if (!e || e.estimated) {
+    const pos = await locate(app ? 8000 : 12000);
+    if (pos) e = { lat: pos.latitude, lon: pos.longitude, acc: pos.accuracy, estimated: false };
+  }
   state.locating = false;
-  if (pos) { setPosition(card, pos); if (loadCards().some((c) => c.id === card.id)) saveCard(card); }
-  else toast('No GPS fix. Step outside and tap Retry GPS.');
-  if (state.card === card) renderCard();
+  if (e) apply(e);
+  else if (state.card === card) renderCard();
+  if (!e || e.estimated) {
+    // Upgrade to a real fix when one comes (step outside, satellites found).
+    const prev = sensors.onFix;
+    sensors.onFix = (p) => { prev?.(p); if (p.acc <= 60 && (!card.digipin || card.approx)) { apply({ ...p, estimated: false }); sensors.onFix = prev; } };
+  }
+}
+
+// The door photo is taken from the guide camera at the moment of arrival (no extra step for the rider).
+function doorPhoto() {
+  const v = $('#video');
+  if (!v.videoWidth) return null;
+  const c = document.createElement('canvas'), k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+  c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  try { return c.toDataURL('image/jpeg', 0.72); } catch { return null; }
 }
 
 $('#photo-in').onchange = async (e) => {
@@ -619,8 +649,33 @@ const listener = new CommandListener((cmd) => {
   if (off) { $('#handsfree').setAttribute('aria-pressed', 'false'); return toast(off === 'network' ? 'Hands-free is off: no offline speech pack for this language. Tap Yes / Not yet.' : `Hands-free is off (${off}).`, 6000); }
   toast(`Heard: "${heard}"`);
 });
+// In the Android app: short listens in a loop through Android's recogniser.
+const appHands = {
+  on: false,
+  async run() {
+    while (this.on && state.running) {
+      this.rec = appListen(state.lang);
+      try {
+        const c = commandOf((await this.rec.done).text);
+        if (c === 'yes' && state.asking) $('#yes').click();
+        else if (c === 'no' && state.asking) $('#notyet').click();
+        else if (c === 'skip') $('#skip').click();
+        else if (c === 'repeat' && say.last) say(say.last.line, say.last.lang);
+        else if (c === 'stop') $('#stop').click();
+      } catch (e) { if (!['NO_MATCH', 'SPEECH_TIMEOUT'].includes(e.code)) { toast(e.message, 6000); this.stop(); } }
+    }
+  },
+  start() { this.on = true; this.run(); },
+  stop() { if (this.on) app?.cancel(); this.on = false; $('#handsfree').setAttribute('aria-pressed', 'false'); },
+};
 $('#handsfree').onclick = () => {
   const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
+  if (app) {
+    if (on) return appHands.stop();
+    appHands.start();
+    $('#handsfree').setAttribute('aria-pressed', 'true');
+    return toast('Listening: say "yes", "haan", "aama", "skip" or "repeat".');
+  }
   if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }
   if (!voiceAvailable) return toast('Voice commands need Chrome speech recognition.');
   listener.start(state.lang);
@@ -685,9 +740,31 @@ $('#mic').onclick = async () => {
   };
   try {
     let heard = '';
+    // 0) In the Android app: Android's own recogniser (Google's, on-device with the offline packs), online or not.
+    if (app && speechEngine !== 'whisper') {
+      $('#vtitle').textContent = 'Listening…';
+      const t0 = performance.now();
+      const rec = appListen(speechLang, {
+        onPartial: (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; },
+        onState: (st, engine) => ($('#vtitle').textContent = st === 'hearing' ? 'Hearing you · ' + engineName(engine) : 'Listening · ' + engineName(engine)),
+        onLevel: (db) => sheet.style.setProperty('--lvl', Math.max(0.15, Math.min(1, (db + 2) / 10)).toFixed(2)),
+      });
+      micStop = rec.stop;
+      try {
+        const r = await rec.done;
+        heard = r.text;
+        done(heard, '', Math.round(performance.now() - t0));
+        state.lastVoice.engine = r.engine;
+      } catch (e) {
+        if (e.code === 'NO_MATCH' || e.code === 'SPEECH_TIMEOUT' || !(await sttAvailable())) throw e;
+        $('#vtitle').textContent = 'No offline pack for this language · using on-device Whisper';
+        $('#vlive').textContent = 'Please say it once more';
+        sheet.classList.remove('speaking');
+      }
+    }
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
     //    Offline it runs on the phone when the language's offline pack is installed.
-    if (usePhoneEngine()) {
+    if (!heard && !app && usePhoneEngine()) {
       const offline = !navigator.onLine;
       $('#vtitle').textContent = offline ? 'Listening · offline, on this phone' : 'Listening…';
       micStop = () => dictate.stop?.();
@@ -717,7 +794,7 @@ $('#mic').onclick = async () => {
       }
     }
     if (!heard) { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again, or tap the box and use the mic on your keyboard.'; }
-  } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Tap the box and use the mic on your keyboard instead.`; }
+  } catch (e) { status.hidden = false; status.textContent = e.code ? e.message : `Voice: ${e.message}. You can also type the directions.`; }
   sheet.hidden = true;
   btn.classList.remove('live');
 };
@@ -845,7 +922,11 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (usePhoneEngine()) {
+    if (app && speechEngine !== 'whisper') {
+      const rec = appListen(speechLang, { onPartial: (p) => ($('#s-heard').textContent = p) });
+      micStop = rec.stop;
+      try { heard = (await rec.done).text; } catch (e) { if (e.code === 'NO_MATCH' || !(await sttAvailable())) throw e; $('#s-heard').textContent = 'Using on-device Whisper · please say it once more'; }
+    } else if (usePhoneEngine()) {
       micStop = () => dictate.stop?.();
       try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p), null, { local: !navigator.onLine && localSpeechSupported() }); }
       catch (e) { phoneFailed(e); if (!(await sttAvailable())) throw e; $('#s-heard').textContent = 'Using on-device Whisper · please say it once more'; }
@@ -917,6 +998,46 @@ setInterval(() => {
   $('#sensors').textContent = sensors.report({ heading: compass.heading, brightness: state.brightness });
 }, 400);
 
+// ---------- Developer mode: tap the logo 5 times (or open with ?dev) ----------
+// Sensor readouts, the field-test panel, voice log and engine switch stay out of the rider's way.
+function setDev(on) { document.body.classList.toggle('dev', on); try { localStorage.setItem('pahunch.dev', on ? '1' : ''); } catch {} }
+try { setDev(/[?&]dev\b/.test(location.search) || localStorage.getItem('pahunch.dev') === '1'); } catch {}
+let devTaps = [];
+document.querySelectorAll('.topbar .mark').forEach((m) => m.addEventListener('click', () => {
+  const now = Date.now();
+  devTaps = [...devTaps.filter((t) => now - t < 3000), now];
+  if (devTaps.length < 5) return;
+  devTaps = [];
+  const on = !document.body.classList.contains('dev');
+  setDev(on);
+  toast(on ? 'Developer mode on' : 'Developer mode off');
+}));
+
+// ---------- A job handed over by a partner app ----------
+function showJob({ src, id, who } = {}) {
+  $('#job').hidden = !(who || id);
+  $('#job-src').textContent = src || 'Partner app';
+  $('#job-id').textContent = id ? `#${id}` : '';
+  $('#job-who').textContent = who || '';
+}
+
+// ---------- Offline voice packs on this phone (Android app, Android 13+) ----------
+const PACK_LANGS = [['en-IN', 'English'], ['hi-IN', 'हिन्दी'], ['ta-IN', 'தமிழ்'], ['kn-IN', 'ಕನ್ನಡ'], ['ml-IN', 'മലയാളം']];
+async function showVoicePacks() {
+  if (!app) return;
+  const el2 = $('#voice-pack');
+  const p = await offlinePacks('en-IN');
+  el2.hidden = false;
+  if (!p.known) { el2.textContent = 'Voice: Google speech on this phone'; return; }
+  const has = (l) => p.installed.some((x) => x.toLowerCase().startsWith(l.toLowerCase()) || x.toLowerCase() === l.split('-')[0]);
+  el2.replaceChildren(document.createTextNode('Offline voice: '));
+  PACK_LANGS.forEach(([l, name], i) => {
+    const b = el('b', null, `${name} ${has(l) ? '✓' : '–'}`);
+    if (!has(l)) { b.style.cursor = 'pointer'; b.onclick = () => { if (!navigator.onLine) return toast('Connect once to download this voice pack.'); app.download(l); toast(`Downloading ${name} voice pack…`); }; }
+    el2.append(b, document.createTextNode(i < PACK_LANGS.length - 1 ? ' · ' : ''));
+  });
+}
+
 // ---------- Splash: warm up models, then continue ----------
 // ?lite: skip loading the AI models (design preview on a weak laptop).
 const LITE = location.search.includes('lite');
@@ -926,7 +1047,7 @@ async function boot() {
   const t0 = performance.now();
   const jobs = LITE ? ['camera', 'ocr', 'llm', 'sensors'].map((k) => Promise.resolve(mark(k, true, 'preview'))) : [
     Promise.all([detector.load(), scene.load().catch(() => null)]).then(() => mark('camera', true, `objects + places · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
-    new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · 4 languages'), () => mark('ocr', false, 'failed')),
+    new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · English, Indian scripts on demand'), () => mark('ocr', false, 'failed')),
     warmNative().then((name) => mark('llm', !!name, name ? `${name} · llama.cpp` : 'rules only (start.sh)')),
     new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
   ];
@@ -939,12 +1060,14 @@ async function boot() {
     // Opened from a partner app (delivery / 108 dispatch): load its directions and plan straight away.
     setMode(link.get('mode') || saved || 'delivery');
     $('#note').value = link.get('go');
+    showJob({ src: link.get('src'), id: link.get('job'), who: link.get('who') });
     show('home');
     setTimeout(() => $('#parse').click(), 300);
   } else {
     setMode(saved || 'delivery');
     show(saved ? 'home' : 'roles');
   }
+  showVoicePacks();
   $('#splash').classList.add('out');
   setTimeout(() => ($('#splash').hidden = true), 450);
 }

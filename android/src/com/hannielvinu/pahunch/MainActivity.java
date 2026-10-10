@@ -103,14 +103,18 @@ public class MainActivity extends Activity {
 
     void open() { web.loadUrl(APP + "?app=1" + pending); }
 
-    // pahunch://go?text=...&mode=ambulance -> index.html#go=...&mode=ambulance
+    // pahunch://go?text=...&mode=ambulance&job=4821&who=Priya&src=... -> index.html#go=...&mode=ambulance&job=...
     void handOver(Intent i) {
         Uri u = i == null ? null : i.getData();
         if (u == null || !"pahunch".equals(u.getScheme())) return;
         String text = u.getQueryParameter("text");
-        String mode = u.getQueryParameter("mode");
         if (text == null) return;
-        pending = "#go=" + Uri.encode(text) + "&mode=" + (mode == null ? "delivery" : Uri.encode(mode));
+        StringBuilder h = new StringBuilder("#go=").append(Uri.encode(text));
+        for (String k : new String[]{"mode", "job", "who", "src"}) {
+            String v = u.getQueryParameter(k);
+            if (v != null) h.append('&').append(k).append('=').append(Uri.encode(v));
+        }
+        pending = h.toString();
     }
 
     @Override

@@ -7,53 +7,184 @@
   <link rel="icon" href="icons/favicon.png?v=3" type="image/png">
   <style>
     @font-face { font-family: Inter; src: url(lib/fonts/inter.woff2) format("woff2"); font-weight: 100 900; }
-    :root { --bg: #f4f5f7; --card: #fff; --text: #1c1c1c; --dim: #6b6f76; --line: #e8e9ec; --brand: #1f6feb; --pah: #e23744; }
+    :root { --bg: #f3f4f6; --card: #fff; --text: #16181d; --dim: #6b6f76; --line: #e6e7ea; --brand: #0f766e; --brand-soft: #e6f4f2; --pah: #e23744; --amb: #e11d48; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
-    header { background: var(--brand); color: #fff; padding: 18px 16px 22px; }
-    header small { opacity: .8; display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
-    header h1 { margin: 4px 0 0; font-size: 22px; }
-    main { padding: 0 16px 32px; margin-top: -12px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin-inline: auto; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 1px 2px #0000000d, 0 8px 20px -14px #00000033; }
-    .label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
-    .row { display: flex; justify-content: space-between; gap: 10px; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    header { background: var(--brand); color: #fff; padding: 16px 16px 44px; }
+    header small { opacity: .85; display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    header h1 { margin: 2px 0 0; font-size: 21px; letter-spacing: -.01em; }
+    .tabs { display: flex; gap: 6px; margin: -30px 16px 0; background: #ffffff26; padding: 4px; border-radius: 12px; max-width: 528px; margin-inline: auto; position: relative; }
+    .tabs button { flex: 1; border: 0; border-radius: 9px; padding: 9px 0; font: 650 14px Inter, sans-serif; background: transparent; color: #fff; }
+    .tabs button.on { background: #fff; color: var(--brand); }
+    main { padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin-inline: auto; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 1px 2px #0000000a, 0 10px 24px -18px #0000004d; }
+    .label { font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .quote { background: #f7f8fa; border-left: 3px solid var(--brand); border-radius: 8px; padding: 10px 12px; margin: 8px 0 12px; font-size: 16px; }
-    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; border-radius: 12px; border: 0; font: 700 16px Inter, sans-serif; text-decoration: none; }
-    .btn.pah { background: var(--pah); color: #fff; box-shadow: 0 10px 22px -10px var(--pah); }
-    .btn.ghost { background: #fff; color: var(--text); border: 1px solid var(--line); margin-top: 8px; }
-    .btn svg { width: 22px; height: 22px; }
-    .note { color: var(--dim); font-size: 13px; text-align: center; }
-    .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #e8f0fe; color: var(--brand); }
-    .tag.red { background: #fde8ea; color: var(--pah); }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; border-radius: 12px; border: 0; font: 700 16px Inter, sans-serif; text-decoration: none; cursor: pointer; }
+    .btn.pah { background: var(--pah); color: #fff; box-shadow: 0 12px 24px -12px var(--pah); }
+    .btn.pah.amb { background: var(--amb); }
+    .btn.ghost { background: #fff; color: var(--text); border: 1px solid var(--line); }
+    .btn.brand { background: var(--brand); color: #fff; }
+    .btn svg { width: 22px; height: 22px; flex: none; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); }
+    .tag.red { background: #fde8ea; color: var(--amb); }
+    .note { color: var(--dim); font-size: 13px; text-align: center; margin: 4px 8px; }
+    .eta { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+    .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 8px 0 4px; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--brand); transition: width .6s; }
+    .last { display: none; margin-top: 12px; padding: 12px; border-radius: 12px; background: #fff4f5; border: 1px solid #f8c9ce; }
+    .last.on { display: block; animation: rise .4s ease-out; }
+    .last p { margin: 0 0 10px; font-size: 14px; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+    .mic { width: 84px; height: 84px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: grid; place-items: center; margin: 8px auto; box-shadow: 0 14px 28px -12px var(--brand); }
+    .mic.live { animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 16px #0f766e22; } }
+    .mic svg { width: 34px; height: 34px; }
+    textarea { width: 100%; min-height: 96px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: 16px/1.45 Inter, sans-serif; resize: vertical; }
+    .door { display: flex; gap: 12px; align-items: center; }
+    .door img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--line); }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <header>
-    <small>Partner rider app · demo integration</small>
-    <h1>Active order #4821</h1>
+    <small>Partner app · demo integration</small>
+    <h1 id="title">Rider · Active order</h1>
   </header>
+  <div class="tabs" role="tablist">
+    <button class="on" data-tab="rider">Rider</button>
+    <button data-tab="customer">Customer</button>
+    <button data-tab="dispatch">108 dispatch</button>
+  </div>
   <main>
-    <section class="card">
-      <div class="row"><p class="label">Deliver to</p><span class="tag">8 min away</span></div>
-      <strong>Priya S. · Flat 2B</strong>
-      <p class="label" style="margin-top:12px">Customer's directions</p>
-      <div class="quote" id="d1">Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate. Doosri manzil.</div>
-      <a class="btn pah" id="go1"><svg viewBox="0 0 64 64"><path d="M32 9c-10 0-17.5 7.4-17.5 17.2C14.5 39 32 55 32 55s17.5-16 17.5-28.8C49.5 16.4 42 9 32 9z" fill="#fff"/><path d="M26 37V25a6 6 0 0 1 12 0v12z" fill="#e23744"/></svg>Guide me to the door</a>
-      <a class="btn ghost" href="#">Call customer</a>
+    <!-- ===== Rider ===== -->
+    <section data-pane="rider" class="card">
+      <div class="row"><p class="label">Order #4821 · deliver to</p><span id="eta-tag" class="tag">On the way</span></div>
+      <strong style="font-size:17px">Priya S. · Flat 2B</strong>
+      <div class="row" style="margin-top:10px"><span class="eta" id="dist">1.2 km</span><span class="note" id="maps">Maps navigation</span></div>
+      <div class="bar"><i id="prog"></i></div>
+      <p class="label" style="margin-top:12px">Customer's directions <span id="src-tag" class="tag" style="margin-left:6px">voice note</span></p>
+      <div class="quote" id="dir"></div>
+      <div id="memory" class="card hidden" style="padding:12px;margin-bottom:12px;box-shadow:none">
+        <p class="label">Door remembered from an earlier delivery</p>
+        <div class="door"><img id="mem-photo" alt=""><div><strong id="mem-dest"></strong><div class="note" style="text-align:left;margin:0" id="mem-pin"></div></div></div>
+      </div>
+      <button class="btn ghost" id="drive">Simulate arriving in the area</button>
+      <div class="last" id="last">
+        <p><b>Last 100 m.</b> Maps stops at the lane. Pahunch takes the customer's own words and guides you to the door, on this phone.</p>
+        <a class="btn pah" id="go-rider"><svg viewBox="0 0 64 64"><path d="M32 9c-10 0-17.5 7.4-17.5 17.2C14.5 39 32 55 32 55s17.5-16 17.5-28.8C49.5 16.4 42 9 32 9z" fill="#fff"/><path d="M26 37V25a6 6 0 0 1 12 0v12z" fill="#e23744"/></svg>Find the door with Pahunch</a>
+      </div>
     </section>
 
-    <section class="card">
-      <div class="row"><p class="label">108 dispatch</p><span class="tag red">Emergency</span></div>
-      <div class="quote" id="d2">Exit gate se seedha, coffee counter ke baad right, red chair ke paas.</div>
-      <a class="btn pah" id="go2">Guide ambulance to the spot</a>
+    <!-- ===== Customer ===== -->
+    <section data-pane="customer" class="card hidden">
+      <p class="label">Help your rider find your door</p>
+      <strong style="font-size:17px">Say how to reach you, in your own words</strong>
+      <p class="note" style="text-align:left;margin:4px 0 0">Any language: English, हिन्दी, தமிழ், ಕನ್ನಡ, മലയാളം, or mixed. Landmarks, turns, gate colour, floor.</p>
+      <button class="mic" id="c-mic" aria-label="Speak directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <p class="note" id="c-state">Tap and speak</p>
+      <textarea id="c-text" placeholder="e.g. Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate, doosri manzil"></textarea>
+      <button class="btn brand" id="c-save" style="margin-top:10px">Send to my rider</button>
+      <p class="note" id="c-done"></p>
     </section>
 
-    <p class="note">How partners integrate: one link (or the SDK) with the customer's own words. Pahunch opens on the rider's phone, plans the route on-device and guides to the door. Nothing is sent to a server.</p>
+    <!-- ===== 108 dispatch ===== -->
+    <section data-pane="dispatch" class="card hidden">
+      <div class="row"><p class="label">108 · Call #A-1173</p><span class="tag red">Emergency</span></div>
+      <strong style="font-size:17px">Caller: chest pain, elderly man</strong>
+      <p class="label" style="margin-top:12px">Caller's description</p>
+      <div class="quote" id="d2" style="border-left-color:var(--amb)">Exit gate se seedha, coffee counter ke baad right, red chair ke paas.</div>
+      <a class="btn pah amb" id="go-108">Guide the ambulance crew to the spot</a>
+      <p class="note">Emergency mode: no questions asked, torch on in the dark, big prompts.</p>
+    </section>
+
+    <p class="note">How partners integrate: one link (or intent) with the customer's own words. Pahunch plans the route and guides on the rider's phone. Nothing is sent to a server.</p>
   </main>
-  <script>
-    const link = (text, mode) => `index.html#go=${encodeURIComponent(text)}&mode=${mode}`;
-    document.getElementById('go1').href = link(document.getElementById('d1').textContent, 'delivery');
-    document.getElementById('go2').href = link(document.getElementById('d2').textContent, 'ambulance');
+  <script type="module">
+    import { app, appListen } from './js/bridge.js';
+    const $ = (s) => document.querySelector(s);
+    const KEY = 'pahunch.partner.directions';
+    const SAMPLE = 'Ganesh mandir ke baad doosri gali mein baayen, MedPlus ke saamne neela gate. Doosri manzil.';
+    const directions = () => { try { return localStorage.getItem(KEY) || SAMPLE; } catch { return SAMPLE; } };
+    const link = (text, mode, extra) => 'index.html#' + new URLSearchParams({ go: text, mode, ...extra }).toString();
+
+    // Tabs
+    document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+      document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== b.dataset.tab));
+      $('#title').textContent = { rider: 'Rider · Active order', customer: 'Customer · Your order', dispatch: '108 · Ambulance dispatch' }[b.dataset.tab];
+    });
+
+    // Rider: directions, remembered door, approach, last-100 m hand-over
+    function renderRider() {
+      $('#dir').textContent = directions();
+      $('#go-rider').href = link(directions(), 'delivery', { job: '4821', who: 'Priya S. · Flat 2B', src: 'Delivery partner' });
+      let cards = [];
+      try { cards = JSON.parse(localStorage.getItem('pahunch.doors.v1') || '[]'); } catch {}
+      const c = cards.find((x) => x.note && x.note.trim() === directions().trim()) || null;
+      $('#memory').classList.toggle('hidden', !c);
+      if (c) {
+        $('#mem-dest').textContent = c.dest + (c.floor != null ? ` · floor ${c.floor === 0 ? 'ground' : c.floor}` : '');
+        $('#mem-pin').textContent = c.digipin ? `DIGIPIN ${c.digipin.replace(/(...)(...)(....)/, '$1-$2-$3')} · saved ${new Date(c.at).toLocaleDateString()}` : `saved ${new Date(c.at).toLocaleDateString()}`;
+        $('#mem-photo').src = c.photo || '';
+        $('#mem-photo').classList.toggle('hidden', !c.photo);
+      }
+    }
+    renderRider();
+    let d = 1200;
+    $('#drive').onclick = () => {
+      $('#drive').disabled = true;
+      const t = setInterval(() => {
+        d = Math.max(80, Math.round(d * 0.62));
+        $('#dist').textContent = d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
+        $('#prog').style.width = `${Math.round(100 - (d / 1200) * 100)}%`;
+        if (d <= 150) {
+          clearInterval(t);
+          $('#eta-tag').textContent = 'Arrived in area';
+          $('#maps').textContent = 'Maps: "You have arrived"';
+          $('#drive').classList.add('hidden');
+          $('#last').classList.add('on');
+          navigator.vibrate?.([120, 80, 120]);
+        }
+      }, 650);
+    };
+
+    // Customer: speak the directions once (Android's recogniser in the app; Chrome speech otherwise)
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let stop = null;
+    $('#c-mic').onclick = async () => {
+      if (stop) { stop(); return; }
+      $('#c-mic').classList.add('live');
+      $('#c-state').textContent = 'Listening…';
+      try {
+        if (app) {
+          const r = appListen('auto', { onPartial: (p) => ($('#c-text').value = p) });
+          stop = r.stop;
+          $('#c-text').value = (await r.done).text;
+        } else if (SR) {
+          await new Promise((res, rej) => {
+            const r = new SR(); r.lang = 'en-IN'; r.interimResults = true;
+            r.onresult = (e) => { $('#c-text').value = [...e.results].map((x) => x[0].transcript).join(' '); };
+            r.onerror = (e) => rej(new Error(e.error)); r.onend = res; stop = () => r.stop(); r.start();
+          });
+        } else throw new Error('type the directions below');
+        $('#c-state').textContent = 'Got it. Check the words, then send.';
+      } catch (e) { $('#c-state').textContent = `Voice: ${e.message}`; }
+      stop = null;
+      $('#c-mic').classList.remove('live');
+    };
+    $('#c-save').onclick = () => {
+      const t = $('#c-text').value.trim();
+      if (!t) { $('#c-done').textContent = 'Say or type the directions first.'; return; }
+      try { localStorage.setItem(KEY, t); } catch {}
+      $('#c-done').textContent = 'Sent. Your rider will get these words at your lane.';
+      renderRider();
+    };
+    $('#c-text').value = directions() === SAMPLE ? '' : directions();
+
+    // 108
+    $('#go-108').href = link($('#d2').textContent, 'ambulance', { job: 'A-1173', who: 'Caller: chest pain, elderly man', src: '108 dispatch' });
   </script>
 </body>
 </html>
