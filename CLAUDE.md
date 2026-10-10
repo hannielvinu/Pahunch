@@ -1,63 +1,48 @@
 # Pahunch: context for Claude (iQOO Hackathon 2026 Grand Finale, Mobility track)
 
-**"Maps get you to the lane. Pahunch gets you to the door."** Spoken landmark directions
-(English / Hindi / Kannada / Tamil, code-mixed) → camera-verified voice + haptic guidance to the exact door,
-on the phone, offline. Every arrival will save a door card (photo, DIGIPIN, floor, route).
+**"Maps get you to the lane. Pahunch gets you to the door."** Spoken landmark directions (English / Hindi / Tamil /
+Kannada / Malayalam, code-mixed) → route steps → camera-verified voice + haptic guidance to the exact door, on the
+phone, offline. Every arrival saves a door card (DIGIPIN, photo, floor, route, QR). Full feature list: README.md.
 
-Builder: **Hanniel Vinu** (solo), github `hannielvinu`, hannielvinu@gmail.com.
-Repo: github.com/hannielvinu/Pahunch (the Phase 1 prototype is `Pahunch-old`: never copy from it).
+Builder: **Hanniel Vinu** (solo), github `hannielvinu`. Repo: github.com/hannielvinu/Pahunch (`Pahunch-old` is the
+Phase 1 prototype: never copy from it).
 
 ## Hard rules
-- **Commits show only Hanniel.** No `Co-Authored-By: Claude`, no "Generated with Claude" lines. Plain messages.
-- Commit + push after every working change (every 30–45 min). Timestamps prove the build happened in the event window.
-- Original code only (written during the event). Open-source libs/models are fine, listed in README.
-- Never claim the NPU or the Q3 chip runs the model. Truth: llama.cpp runs on the phone's CPU in Termux;
-  the in-Chrome path uses the Adreno GPU via WebGPU. Mark unmeasured numbers as assumptions.
-- "A well-built simple product beats a broken complex one": keep the core loop working at all times.
+- **Commits show only Hanniel.** No `Co-Authored-By: Claude`, no "Generated with Claude" lines.
+- Commit + push after every working change. Run all four test files first (below); they must pass.
+- Never claim the NPU or the Q3 chip runs a model. Truth: llama.cpp / whisper.cpp run on the CPU in Termux; vision
+  runs on the Adreno GPU via MediaPipe. The OpenCL (GPU) llama.cpp build segfaults on this phone (GPU off by default).
+- Don't break the working demo. Safe tags: `cp1-safe`, `cp2-safe`. Feature freeze Sat 17:30 for Checkpoint 2 (19:00).
+- The laptop is weak: it only edits/pushes. Everything runs and is tested on the phone.
 
-## Environment (everything runs on the iQOO 15 phone)
-- Termux: `bash tools/start.sh` starts llama-server (port 8081) + `python -m http.server 8080`.
-  App: Chrome at `http://localhost:8080` (localhost = secure context, so camera/compass/vibration work).
-- `bash tools/get-models.sh [4b]` downloads models into `models/` (gitignored).
-  start.sh prefers `qwen2.5-1.5b-instruct-q4_k_m.gguf` (`MODEL=...` overrides), llama-server `-t 4`.
-- Chrome on this phone: WebGPU ✓ (Adreno 8xx), **no shader-f16** → in-browser models must be q4 (fp32 math), not q4f16.
-- The laptop is weak and crashes under load: it is only a keyboard/screen via Office Kit. Don't plan work on it.
+## Run (Termux, not Ubuntu)
+- `bash tools/start.sh --bg` starts everything in the background and returns the prompt; `bash tools/stop.sh` stops all.
+  Without `--bg`, Ctrl+C in that session kills all servers (this caused "ECONNREFUSED 8081" before).
+- Ports: app 8080 (python http.server), llama-server 8081, whisper-server 8082 (final) + 8083 (live), speech bridge 8084.
+- Models picked in this order (models/ is gitignored): LLM `gemma-3n-E2B-it-Q4_0.gguf` > qwen2.5-1.5b > Qwen3-1.7B > Qwen3-4B;
+  Whisper final `ggml-medium-q5_0` > small > base, live = base. `MODEL=… bash tools/start.sh --bg` overrides.
 
-## Code map (no build step, ES modules)
-- `js/parser.js`: rule parser → step graph `{floor, lang, parser, steps:[{n, kind: pass|turn|arrive, landmark{type,name,colour}, turn, ordinal, road, ref{relation, landmark}, verify{signs, alt, colour, compass, confidence}}]}`
-- `js/llm.js`: on-device LLM parser. Short line format (PASS/TURN/ARRIVE/FLOOR), strict reader, loop guard,
-  names must appear in the note, turns/ordinals/floor/relation grounded from the rule parser.
-  **Policy:** if the rule parser reads a complete route it is used and the AI cross-checks it (badge);
-  otherwise the checked AI route is used. Prompt prefix is cached (`cache_prompt`).
-- `js/vision.js`: camera, Tesseract OCR (local files in `lib/`), sign matching (1-edit tolerance), colour thirds.
-- `js/guide.js`: voice prompts en/hi/kn/ta, vibration patterns, compass turn detector.
-- `js/digipin.js`: DIGIPIN encode/decode (10 chars stored, `4P3 JK85 2C9` display). `js/doorcard.js`: door cards
-  in localStorage (`pahunch.doors.v1`), photo shrink, GPS fix, QR payload, JSON for the laptop.
-- `js/overlay.js`: guide canvas over the camera (rAF): OCR boxes (green = step's sign, red = decoy), turn arrow +
-  compass arc 0–90°, colour-third tint. `js/netmeter.js`: off-device bytes/requests via Resource Timing (chip).
-- `js/app.js`: screens home → plan → guide → arrive (door card; saved doors list on home). `js/device.js`: WebGPU/sensor report.
-- Tests: `node tests/parser.test.mjs`, `llm.test.mjs`, `doorcard.test.mjs`, `overlay.test.mjs` (no model needed),
-  `node tools/eval-llm.mjs` (needs llama-server: accuracy + latency of the real model).
+## Pipeline
+- **Voice**: online → Chrome Web Speech (Google's engine, per-language locale from the chips; Tanglish→ta-IN,
+  Hinglish→hi-IN). Offline → (1) Android's own recogniser via `tools/stt-bridge.py` (Termux:API `termux-speech-to-text`,
+  SSE on :8084, client `js/androidstt.js`), (2) Chrome on-device recognition if supported (`processLocally`),
+  (3) Whisper (`js/stt.js`, whisper.cpp). Chrome's web speech needs the network on Android, so offline needs (1) or (3).
+- **Understanding**: `js/native.js` maps native-script route words (incl. transliterated English) to the parser's
+  vocabulary. `js/parser.js` rule engine (exact, instant). `js/llm.js` **rewriter**: Gemma 3n rewrites any language/mix
+  into ONE plain English route line ("go past the X, take the second left, then the Y opposite the Z, second floor"),
+  the rules parse it, names must come from the note, turns/relations cross-checked; shown as "AI understood: …".
+- **Seeing**: `js/vision.js` (Tesseract OCR centre crop, white-balanced colour mask), `js/detector.js` (EfficientDet
+  objects), `js/scene.js` (EfficientNet appearance: temple/gate/shop…), `js/overlay.js`, `js/sensors.js` (fused heading
+  for turns, steps, GPS). `js/guide.js` conversational voice lines in 5 languages + vibration. `js/guard.js` blocks
+  off-device requests.
 
-## Status (Fri 9 Oct, ~23:00)
-Done and verified on the phone: parser (4 samples), camera + OCR on real signs, compass turn, Hindi voice, vibration,
-llama.cpp in Termux (Qwen2.5-1.5B: 1.7–2.2 s/route with prompt cache, but inaccurate alone, hence the grounding).
+## Measured (on the phone)
+- `node tools/eval-llm.mjs`: Gemma 3n E2B rewriter **7/7 at 5.0 s/route** (Qwen3-1.7B 4/7 at 3.8 s; old approaches 1/7–3/7).
+- Tests: `node tests/parser.test.mjs && node tests/llm.test.mjs && node tests/overlay.test.mjs && node tests/doorcard.test.mjs`
+- Voice: `node tools/eval-voice.mjs` scores recordings in tests/voice/ (needs whisper-server + ffmpeg).
 
-LLM go/no-go (Fri 9 Oct, `node tools/eval-llm.mjs`, llama.cpp CPU, 6 threads): Qwen3-4B Q4_0 = 3/7 AI-alone correct,
-mean 5.4 s/route, ~12 tok/s → **no-go**. start.sh defaults to Qwen2.5-1.5B as the cross-check; rule parser stays primary.
-
-Door card (Fri 9 Oct): built, unit-tested in Node; **not yet verified on the phone** (photo, GPS, QR render).
-
-Guide visuals for Checkpoint 1 (Sat 10 Oct, early): OCR boxes, turn arrow/arc, colour tint, network chip, arrival
-animation. Unit-tested in Node; **not yet seen on the phone** (check box alignment, smoothness, chip stays 0 B).
-
-## Next (in order)
-2. Verify the door card on the phone (arrive → photo → DIGIPIN → QR → Send to laptop → Saved doors).
-3. GPS area gate (~150 m, demo toggle). 4. On-device voice input: Whisper tiny via transformers.js (WASM quantized
-   or WebGPU q4); models in `finale-assets` / Hugging Face `onnx-community/whisper-tiny`.
-5. Office Kit flows: "Paste from laptop" (done), "Send door card to laptop" (done: clipboard + JSON download).
-6. Network meter (0 B during guidance), latency panel, QR scan-to-load (jsQR).
-
-## Schedule
-Checkpoints: Sat 10:00, Sat 19:00, Sun 09:00. LLM go/no-go Sat 16:30. Feature freeze Sun 10:00. Submit by Sun 11:30.
-Sleep 00:00–08:00 Fri and 23:00–07:00 Sat (non-negotiable; Hanniel is unwell).
+## Open problem (Sat 16:45): offline voice through the app's own mic
+Airplane mode: Chrome web speech fails (needs network); Whisper accuracy is poor for Indian speech. Bridge built
+(stt-bridge.py). Termux:API + `pkg install termux-api` installed; `termux-speech-to-text` in airplane mode returns
+**"error no match"**. Likely causes (Android settings Hanniel must tap): default voice input service is vivo's, not
+Google's; Google voice language ≠ downloaded offline pack (e.g. English US vs English India); offline pack not downloaded.
