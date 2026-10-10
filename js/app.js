@@ -43,7 +43,7 @@ window.addEventListener('hashchange', () => {
 
 // ---------- Home ----------
 for (const [lang, note] of Object.entries(SAMPLES)) {
-  const b = el('button', 'chip', lang.toUpperCase());
+  const b = el('button', 'chip', { en: 'Try English', hi: 'Hinglish', kn: 'Kannada', ta: 'Tamil' }[lang] || lang);
   b.onclick = () => { $('#note').value = note; };
   $('#samples').append(b);
 }
@@ -61,7 +61,7 @@ $('#paste').onclick = async () => {
 $('#parse').onclick = async () => {
   const note = $('#note').value.trim();
   if (!note) return toast('Type, paste or pick a sample first.');
-  vision.loadOcr('eng').catch((e) => toast(`OCR failed to load: ${e.message}`));
+  if (!LITE) vision.loadOcr('eng').catch((e) => toast(`OCR failed to load: ${e.message}`));
   const btn = $('#parse'), box = $('#thinking'), bar = $('#thinking-progress');
   btn.disabled = true;
   box.hidden = false;
@@ -340,7 +340,7 @@ async function startGuide() {
   announce();
   ocrLoop();
   tick();
-  if (!detector.ready) detector.load().then(detectLoop).catch((e) => ($('#det-ms').textContent = `vision off: ${e.message}`));
+  if (LITE) {} else if (!detector.ready) detector.load().then(detectLoop).catch((e) => ($('#det-ms').textContent = `vision off: ${e.message}`));
   else detectLoop();
   if (ambulance()) navigator.vibrate?.([200, 100, 200, 100, 200]);
 }
@@ -550,10 +550,13 @@ setInterval(() => {
 }, 400);
 
 // ---------- Splash: warm up models, then continue ----------
+// ?lite: skip loading the AI models (design preview on a weak laptop).
+const LITE = location.search.includes('lite');
+
 async function boot() {
   const mark = (k, ok, note) => { const li = document.querySelector(`#boot [data-k="${k}"]`); li.classList.add(ok ? 'ok' : 'skip'); if (note) li.insertAdjacentHTML('beforeend', `<em>${note}</em>`); };
   const t0 = performance.now();
-  const jobs = [
+  const jobs = LITE ? ['camera', 'ocr', 'llm', 'sensors'].map((k) => Promise.resolve(mark(k, true, 'preview'))) : [
     detector.load().then(() => mark('camera', true, `EfficientDet · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
     new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · 4 languages'), () => mark('ocr', false, 'failed')),
     warmNative().then((up) => mark('llm', up, up ? 'Qwen2.5 · llama.cpp' : 'rules only (start.sh)')),
