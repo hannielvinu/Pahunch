@@ -16,7 +16,7 @@ Built from scratch by **Hanniel Vinu** during the iQOO Hackathon 2026 Grand Fina
 
 | Stage | How |
 |---|---|
-| **Hear** | Type or speak. Online, speech goes through Chrome's Web Speech API (Google's engine), language picked or auto, including Tanglish / Hinglish modes. Offline (airplane mode), the mic hands over to the phone keyboard's own voice typing (Gboard, recognised on the phone with its offline languages) and the words stream straight into the note. Whisper (whisper.cpp in Termux) remains selectable. Native-script speech is understood directly; the English translation is kept as a backup. Step-by-step voice mode reads each step back for a yes. |
+| **Hear** | Type or speak into the app's mic. Speech goes to the phone's own Google speech engine through Chrome's Web Speech API, language picked or auto, including Tanglish / Hinglish; in airplane mode it runs on the phone when the language's offline pack is installed. Otherwise the app switches to Whisper (whisper.cpp in Termux, on the phone) in the same screen. Small talk ("hi, how are you") is recognised as not being directions: no plan is made and the AI is not asked. |
 | **Plan** | Rule engine for landmarks, turns (several per sentence), ordinals, colours, relations (opposite / next to / near) and floors in five languages and their code-mixed forms, plus native-script vocabulary. An on-device LLM (Gemma 3n E2B, llama.cpp) rewrites what was said, in any language or mix, into one plain English route line that the rules then parse (shown as "AI understood"); its turns, floor and relations are checked against the customer's own words and landmark names must appear in what was said. Any step can be fixed with one tap. |
 | **See** | Signboard OCR (Tesseract, enlarged centre of the view, fuzzy matching) - green box for the step's sign, red for decoys. Object detection (EfficientDet-Lite0) confirms everyday landmarks ("the black chair"). Appearance classifier (EfficientNet-Lite0) recognises temple-like buildings, gates, shop fronts, petrol pumps. Colour mask for "blue gate". Torch in the dark. |
 | **Move** | Turns from the fused orientation sensor (camera heading, correct when the phone is upright, not thrown by indoor magnetics); steps walked from the accelerometer; GPS area and DIGIPIN. |
@@ -58,7 +58,7 @@ bash tools/start.sh             # LLM :8081, speech :8082/:8083, app :8080
 Open `http://localhost:8080` in Chrome (localhost is a secure context: camera, mic, sensors, vibration work).
 
 ## Tests and evaluation
-- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs`
+- `node tests/parser.test.mjs` · `node tests/llm.test.mjs` · `node tests/overlay.test.mjs` · `node tests/doorcard.test.mjs` · `node tests/understanding.test.mjs` (chat, injection, invented landmarks, with a stand-in llama-server)
 - `node tools/eval-llm.mjs`: on-device LLM accuracy and latency on 7 routes (needs llama-server)
 - `node tools/eval-voice.mjs`: recorded voice samples → speech → route, scored against the intended route
 

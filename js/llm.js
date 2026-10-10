@@ -7,7 +7,7 @@
 // the words in the note; when the rule parser already reads a complete route, its route is used and the
 // model acts as a cross-check.
 
-import { LANDMARKS, verifyFor, parseRules, describe, COLOUR_OF, TYPE_OF, BRANDS, GENERIC, mentionsRelation } from './parser.js';
+import { LANDMARKS, verifyFor, parseRules, describe, COLOUR_OF, TYPE_OF, BRANDS, GENERIC, mentionsRelation, routeWords, isRoute, typeSaid } from './parser.js';
 
 const NATIVE_URL = 'http://localhost:8081';
 const BROWSER_MODEL = 'Qwen2.5-1.5B-Instruct';
@@ -155,6 +155,15 @@ const SHOTS_REWRITE = [
   ['walk to the registration desk, then left at the coffee machine and you will see the black chair near the stage',
     'go past the registration desk, go past the coffee machine, take the first left, then the black chair near the stage'],
 ];
+
+// The rewriter must answer with a route line in its fixed phrasing. A chat reply ("I am doing well, thank you for
+// asking!"), a question, a refusal or an explanation is not a route and is thrown away.
+export function rewriteOk(line) {
+  const l = (line || '').toLowerCase().trim();
+  if (!l || l.length > 300 || l.includes('?')) return false;
+  if (/\b(i|i'm|im|me|you|your|sorry|hello|hi|hey|thank|thanks|assistant|language model|cannot|can't|unable|please|help)\b/.test(l)) return false;
+  return /^(go|take|then|turn|walk|from|pass|cross|continue|keep|reach|after|at|the|first|second|third|fourth|ground|\d)\b/.test(l);
+}
 
 export function messagesRewrite(note) {
   const m = [{ role: 'system', content: SYSTEM_REWRITE }];
@@ -426,6 +435,9 @@ export async function hasBrowserModel() {
 // mode: 'auto' | 'native' | 'browser' | 'rules'. Always returns a usable graph.
 export async function parseNote(note, { mode = 'auto', device, onToken, onStatus, onProgress } = {}) {
   const rules = parseRules(note);
+  // Small talk or anything without a single route word ("hi how are you"): nothing to plan, and the model is not
+  // asked at all (a chat model would chat back).
+  if (!routeWords(note)) return { graph: rules, stats: null, notRoute: true };
   if (mode === 'rules') return { graph: rules, stats: null };
   let backend = mode;
   if (mode === 'auto') backend = (await nativeUp()) ? 'native' : device?.webgpu && (await hasBrowserModel()) ? 'browser' : null;
@@ -437,13 +449,24 @@ export async function parseNote(note, { mode = 'auto', device, onToken, onStatus
     if (backend === 'native' && NATIVE_REWRITE) {
       // First real line of the answer, ignoring any <think>…</think> block some models emit.
       const line = (stats.out.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').split('\n').map((l) => l.trim()).find(Boolean) || '').replace(/^["'\s]+|["'\s]+$/g, '');
+      if (!rewriteOk(line)) throw new Error('model did not answer with a route');
       const rw = parseRules(line);
       // Names in the rewrite must come from the customer's words (skipped for native-script notes: transliterated).
       for (const s of rw.steps) for (const lm of [s.landmark, s.ref?.landmark]) if (lm?.name) lm.name = cleanName(lm.name, note);
+      // A landmark type the customer never mentioned, with no name of theirs behind it, was invented: drop it.
+      // (Latin-script notes; native-script words can't all be string-checked.)
+      const latin = !/[^\u0000-ɏ]/.test(note);
+      const invented = (lm) => latin && lm && lm.type !== 'other' && !lm.name && !typeSaid(note, lm.type);
+      for (const s of rw.steps) {
+        if (invented(s.landmark)) s.landmark = null;
+        if (invented(s.ref?.landmark)) s.ref = null;
+        if (s.landmark && s.landmark.type === 'other' && !s.landmark.name && !s.landmark.colour) s.landmark = null;
+      }
       // A landmark whose name was dropped and that has no type, colour or relation left says nothing: remove it.
       rw.steps = rw.steps.filter((s) => s.kind === 'turn' || s.ref || (s.landmark && (s.landmark.name || s.landmark.colour || s.landmark.type !== 'other')) || s === rw.steps.at(-1));
       rw.steps.forEach((s) => { s.verify = verifyFor(s); });
       const g = ground(rw, rules);
+      if (!isRoute(g)) throw new Error('model found no route');
       Object.assign(g, { lang: rules.lang, parser: 'llm', rewrite: line });
       const agree = agrees(g, rules);
       const turns = (x) => x.steps.filter((s) => s.kind === 'turn').length;

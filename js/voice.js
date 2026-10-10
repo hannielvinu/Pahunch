@@ -34,7 +34,12 @@ export function dictate(lang = 'en', onPartial, onState, { local = false } = {})
       text = [...e.results].map((x) => x[0].transcript).join(' ');
       onPartial?.(text);
     };
-    r.onerror = (e) => { if (finished) return; finished = true; clearTimeout(idle); reject(new Error(e.error === 'network' ? 'online speech needs internet (offline voice: run tools/get-whisper.sh)' : e.error === 'no-speech' ? 'no speech heard' : e.error)); };
+    r.onerror = (e) => {
+      if (finished) return;
+      finished = true; clearTimeout(idle);
+      const msg = { network: 'the phone speech engine has no offline pack for this language', 'no-speech': 'no speech heard', 'language-not-supported': 'language not installed in the phone speech engine', 'not-allowed': 'microphone permission is off for Chrome', 'service-not-allowed': 'phone speech engine not available' }[e.error] || e.error;
+      reject(Object.assign(new Error(msg), { code: e.error }));
+    };
     r.onend = finish;
     dictate.stop = () => { try { r.stop(); } catch {} setTimeout(finish, 1500); }; // Done always returns
     try { r.start(); } catch (err) { finished = true; reject(err); }
@@ -80,7 +85,7 @@ export class CommandListener {
       const c = commandOf(t);
       if (c) this.onCommand(c, t);
     };
-    r.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'network') { this.on = false; this.onHeard?.(`(voice off: ${e.error})`); } };
+    r.onerror = (e) => { if (['not-allowed', 'network', 'language-not-supported', 'service-not-allowed'].includes(e.error)) { this.on = false; this.onHeard?.('', e.error); } };
     r.onend = () => { if (this.on) setTimeout(() => this._run(), 300); };
     try { r.start(); this.r = r; } catch { this.on = false; }
   }

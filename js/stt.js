@@ -39,7 +39,7 @@ function toWav16k(chunks, rate, lastSeconds = MAX_S) {
 
 // Vocabulary hints per language: steer recognition towards direction words (Whisper "initial prompt").
 export const SPEECH_LANGS = {
-  auto: { label: 'Auto', prompt: '' },
+  auto: { label: 'Auto', prompt: 'Directions: go straight, turn left, turn right, second cross, temple, mandir, kovil, pharmacy, opposite, saamne, blue gate, second floor.' },
   // Code-mixed speech, written in Latin letters (how most people actually give directions).
   tanglish: { label: 'Tanglish', code: 'en', prompt: 'Straight-ah po, left cut pannu, right cut pannu, rendavathu theru, kovil thandi, medical kadai ethire, neela gate veedu, second floor.' },
   hinglish: { label: 'Hinglish', code: 'en', prompt: 'Seedha aao, left lo, right mudo, doosri gali, mandir ke baad, medical ke saamne, neela gate wala ghar, doosri manzil.' },

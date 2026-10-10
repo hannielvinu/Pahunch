@@ -1,5 +1,5 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
-import { SAMPLES, describe, parseRules, verifyFor } from './parser.js';
+import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords } from './parser.js';
 import { parseNote, warmNative, complete } from './llm.js';
 import { Vision, matchSigns } from './vision.js';
 import { Overlay } from './overlay.js';
@@ -10,7 +10,6 @@ import { Scene, TYPE_TAG } from './scene.js';
 import { Sensors, GyroTurn } from './sensors.js';
 import { dictate, CommandListener, voiceAvailable, localSpeechSupported } from './voice.js';
 import { listen, sttAvailable, SPEECH_LANGS } from './stt.js';
-import { bridgeAvailable, bridgeListen } from './androidstt.js';
 import { deviceReport, describeDevice } from './device.js';
 import { formatDigipin } from './digipin.js';
 import { loadCards, saveCard, deleteCard, makeCard, setPosition, qrPayload, cardJson, shrinkPhoto, locate } from './doorcard.js';
@@ -90,11 +89,16 @@ $('#parse').onclick = async () => {
     const alt = await parseNote(state.altNote, { mode: 'rules' });
     if (complete(alt.graph)) Object.assign(res, alt, { stats: null, fallback: null });
   }
-  const g0 = res.graph;
-  if (g0.parser === 'rules' && !g0.steps.some((s) => s.kind === 'turn' || s.landmark)) {
-    // Nothing route-like in the note (e.g. "Hi"): don't show an empty plan.
-    return toast('No landmarks or turns found. Try something like "past the temple, second left, blue gate opposite MedPlus".');
+  if (res.notRoute || !isRoute(res.graph)) {
+    // Small talk ("hi how are you") or nothing checkable: never show an empty or made-up plan.
+    if (state.lastVoice) { logVoice({ ...state.lastVoice, used: note, plan: '(not directions)', engine: '-' }); state.lastVoice = null; }
+    const st = $('#mic-status');
+    st.hidden = false;
+    st.textContent = 'That doesn’t sound like directions. Say the landmarks and turns, like “past the temple, second left, blue gate opposite MedPlus”.';
+    buzz('ask');
+    return;
   }
+  $('#mic-status').hidden = true;
   state.parse = res;
   state.graph = res.graph;
   if (state.lastVoice) { logVoice({ ...state.lastVoice, used: note, plan: res.graph.steps.map(describe).join(' → '), engine: res.graph.parser }); state.lastVoice = null; }
@@ -611,22 +615,30 @@ const listener = new CommandListener((cmd) => {
   else if (cmd === 'skip') $('#skip').click();
   else if (cmd === 'repeat' && say.last) say(say.last.line, say.last.lang);
   else if (cmd === 'stop') $('#stop').click();
-}, (heard) => toast(`Heard: "${heard}"`));
+}, (heard, off) => {
+  if (off) { $('#handsfree').setAttribute('aria-pressed', 'false'); return toast(off === 'network' ? 'Hands-free is off: no offline speech pack for this language. Tap Yes / Not yet.' : `Hands-free is off (${off}).`, 6000); }
+  toast(`Heard: "${heard}"`);
+});
 $('#handsfree').onclick = () => {
   const on = $('#handsfree').getAttribute('aria-pressed') === 'true';
   if (on) { listener.stop(); $('#handsfree').setAttribute('aria-pressed', 'false'); return; }
   if (!voiceAvailable) return toast('Voice commands need Chrome speech recognition.');
-  if (!navigator.onLine) return toast('Offline: hands-free needs Chrome speech (network). Tap Yes / Not yet instead.');
   listener.start(state.lang);
   $('#handsfree').setAttribute('aria-pressed', 'true');
   toast('Listening: say "yes", "haan", "skip" or "repeat".');
 };
 
-// ---------- Keyboard voice (Gboard) ----------
-// The phone keyboard's own mic (Gboard voice typing) recognises speech on the phone, also in airplane mode once
-// its offline speech languages are downloaded. We focus the note (must happen inside the tap, or Android won't
-// raise the keyboard); the rider taps the keyboard mic and the words stream into the note.
-const keyboardVoice = () => speechEngine === 'keyboard' || (speechEngine === 'auto' && !navigator.onLine);
+// ---------- Keyboard voice (Gboard), only when chosen in Live sensors ----------
+// The keyboard's own mic types into the note. Optional: the app's mic does offline speech itself (below).
+const keyboardVoice = () => speechEngine === 'keyboard';
+
+// Offline, the phone's speech engine (Google's, the one Gboard uses) works only if its offline pack for that
+// language is installed. When it fails offline for a language, that language goes straight to on-device
+// Whisper until the phone is back online, so the rider is asked to repeat at most once.
+const phoneOfflineFails = new Set();
+addEventListener('online', () => phoneOfflineFails.clear());
+const usePhoneEngine = () => voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || !phoneOfflineFails.has(speechLang));
+const phoneFailed = (e) => { if (!navigator.onLine && !['no-speech', 'aborted'].includes(e?.code)) phoneOfflineFails.add(speechLang); };
 let kbd = null; // { t0 } while keyboard dictation is open
 function kbdOpen() {
   const note = $('#note');
@@ -674,25 +686,21 @@ $('#mic').onclick = async () => {
   try {
     let heard = '';
     // 1) The phone's speech engine (best for Indian languages and code-mixing), live transcript in our sheet.
-    // Offline: Android's own recogniser through the local bridge (works in airplane mode with offline packs).
-    if (!navigator.onLine && speechEngine !== 'whisper' && (await bridgeAvailable())) {
-      $('#vtitle').textContent = 'Listening · offline, on this phone';
-      const t0 = performance.now();
-      const rec = bridgeListen({ onPartial: (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; } });
-      micStop = rec.stop;
-      try { heard = await rec.done; if (heard) done(heard, '', Math.round(performance.now() - t0)); } catch {}
-    }
-    const offlineLocal = !navigator.onLine && localSpeechSupported();
-    if (!heard && voiceAvailable && speechEngine !== 'whisper' && (navigator.onLine || offlineLocal)) {
-      $('#vtitle').textContent = offlineLocal ? 'Listening · offline, on this phone' : 'Listening…';
+    //    Offline it runs on the phone when the language's offline pack is installed.
+    if (usePhoneEngine()) {
+      const offline = !navigator.onLine;
+      $('#vtitle').textContent = offline ? 'Listening · offline, on this phone' : 'Listening…';
       micStop = () => dictate.stop?.();
       const t0 = performance.now();
       try {
-        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m), { local: offlineLocal });
+        heard = await dictate(speechLang, (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; }, (m) => ($('#vtitle').textContent = m), { local: offline && localSpeechSupported() });
         if (heard) done(heard, '', Math.round(performance.now() - t0));
       } catch (e) {
+        phoneFailed(e);
         if (!(await sttAvailable())) throw e; // nothing to fall back to
-        $('#vtitle').textContent = 'Switching to on-device Whisper…';
+        $('#vtitle').textContent = offline ? 'No offline speech pack for this language · using on-device Whisper' : 'Switching to on-device Whisper…';
+        $('#vlive').textContent = 'Please say it once more';
+        sheet.classList.remove('speaking');
       }
     }
     // 2) Fallback: on-device Whisper (works with no network and no speech pack).
@@ -745,9 +753,9 @@ $('#vlog-copy').onclick = async () => {
 };
 
 const ENGINE_LABELS = {
-  auto: 'Speech: auto (online: phone engine · offline: keyboard mic)',
-  keyboard: 'Speech: keyboard mic always (Gboard, on-device)',
-  whisper: 'Speech: Whisper only (offline)',
+  auto: 'Speech: phone engine, Whisper fallback (in-app, offline too)',
+  whisper: 'Speech: Whisper only (on-device)',
+  keyboard: 'Speech: keyboard mic (Gboard)',
 };
 const engineLabel = () => ($('#engine-toggle').textContent = ENGINE_LABELS[speechEngine] || ENGINE_LABELS.auto);
 $('#engine-toggle').onclick = () => {
@@ -837,14 +845,10 @@ $('#s-mic').onclick = async () => {
   build.pending = null; renderBuild();
   let heard = '';
   try {
-    if (!navigator.onLine && speechEngine !== 'whisper' && (await bridgeAvailable())) {
-      const rec = bridgeListen({ onPartial: (p) => ($('#s-heard').textContent = p) });
-      micStop = rec.stop;
-      try { heard = await rec.done; } catch {}
-    }
-    if (!heard && voiceAvailable && speechEngine !== 'whisper' && navigator.onLine) {
+    if (usePhoneEngine()) {
       micStop = () => dictate.stop?.();
-      try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p)); } catch (e) { if (!(await sttAvailable())) throw e; }
+      try { heard = await dictate(speechLang, (p) => ($('#s-heard').textContent = p), null, { local: !navigator.onLine && localSpeechSupported() }); }
+      catch (e) { phoneFailed(e); if (!(await sttAvailable())) throw e; $('#s-heard').textContent = 'Using on-device Whisper · please say it once more'; }
     }
     if (!heard && (await sttAvailable())) {
       const rec = listen({ canvas: $('#s-wave'), onPartial: (t) => ($('#s-heard').textContent = t), getLang: () => speechLang });
@@ -862,7 +866,7 @@ function takeStep(heard) {
   $('#s-heard').textContent = `"${heard}"`;
   const parsed = parseRules(heard);
   if (speechLang === 'auto' && parsed.lang && parsed.lang !== 'en') build.lang = parsed.lang; // keyboard voice: reply in the language spoken
-  let steps = parsed.steps.filter((s) => s.kind === 'turn' || s.landmark);
+  let steps = routeWords(heard) ? parsed.steps.filter((s) => s.kind === 'turn' || s.landmark) : [];
   if (!steps.length && build.alt) steps = parseRules(build.alt).steps.filter((s) => s.kind === 'turn' || s.landmark);
   build.alt = null;
   if (!steps.length) { toast('No landmark or turn in that. Try "second left" or "Ganesh mandir".'); return; }

@@ -118,7 +118,11 @@ const VERBS = set(`walk walking go going come coming take turn turning see look 
   hello hey please thanks thank bro sir madam bhaiya anna boss dear just also very big small new old first last
   cut pannu panni pannunga po poi ponga poitu vaa vaanga edu edunga ah dhaan than romba konjam andha indha antha intha adhu idhu color colour coloured colored rang nillunga nillu nillunge nil iruken irukken irukom
   lo le lena lijiye khade khada khadi milenge milega hoon hun aao aaiye aana jao jaiye jana chalo chaliye mudo mudiye mud ruko dekho hai hain ho hoga raha rahe wahan yahan udhar idhar aur bas
-  banni baa hogi hogu nodi tirugi thirugi illi ide alli vaanga vanga ponga poi thirumbu thirumbunga paarunga irukku iruku inge ange`);
+  banni baa hogi hogu nodi tirugi thirugi illi ide alli vaanga vanga ponga poi thirumbu thirumbunga paarunga irukku iruku inge ange
+  hi hii hiii hai helo how what why who whom whose when which doing done fine good great nice morning afternoon evening night
+  today tomorrow yesterday now later sorry yes yeah no not namaste namaskar namaskara vanakkam kaise kaisa kaisi kya kyun aap tum
+  mera meri tera teri hum enna epdi eppadi eppudi nalla nallaa sari seri hegiddira hegidiya chennagide sukhamano entha evide time
+  call calling hear hearing listen test testing mic voice something anything nothing everything thing`);
 
 // Everyday objects the on-device vision model (COCO classes) can see, by the words people use for them.
 export const OBJECTS = {
@@ -214,6 +218,27 @@ function findLandmarks(toks) {
     lm.colour ??= null;
   }
   return found;
+}
+
+// Words that only turn up in directions: turns, ordinals, floors, relations, colours, landmark types, brands, objects
+// a camera can see, and place words the types don't cover. Small talk ("hi how are you") has none of them.
+const PLACE_WORDS = set(`mall metro station signal circle junction office tower block flat flats colony nagar layout market hall
+  theatre cinema hostel lodge complex plaza square chowk bridge flyover toll stadium airport railway platform pillar lamp pole post
+  corner bend end machine fountain statue tank`);
+const CHAT_OBJECTS = set('person people man woman phone mobile cat dog book books bed cup mug bag computer pc mouse keyboard');
+const routeWord = (w) => isLexical(w) || w in BRANDS || PLACE_WORDS.has(w) || (w in OBJECTS && !CHAT_OBJECTS.has(w));
+export function routeWords(text) {
+  return tokens(normalise(text || '')).filter(({ w }) => routeWord(w)).length;
+}
+// A plan worth guiding with: at least one turn, or one landmark the camera or rider can actually check
+// (a known type, a colour, a brand, a place word, an object), or a destination described by a relation.
+const checkable = (lm) => !!lm && (lm.type !== 'other' || !!lm.colour || W((lm.name || '').toLowerCase()).some(routeWord));
+export function isRoute(g) {
+  return !!g?.steps?.some((s) => s.kind === 'turn' || checkable(s.landmark) || checkable(s.ref?.landmark));
+}
+// Was a landmark of this type actually mentioned (any language word or brand for it)?
+export function typeSaid(note, type) {
+  return tokens(normalise(note || '')).some(({ w }) => TYPE_OF[w] === type || BRANDS[w]?.[0] === type);
 }
 
 const landmarkOut = (lm) => ({ type: lm.type, name: lm.name, colour: lm.colour });
