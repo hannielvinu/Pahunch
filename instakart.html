@@ -104,10 +104,9 @@
         <option value="hinglish">Hindi + English mix</option>
       </select>
       <div class="rec" style="margin-top:12px">
-        <button class="mic" id="mic" aria-label="Record voice directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-        <div><strong id="rec-title">Record voice directions</strong><div class="muted" id="rec-state">In your own language: landmarks, turns, gate colour, floor.</div></div>
+        <button class="mic" id="mic" aria-label="Speak your directions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <div><strong id="rec-title">Speak your directions</strong><div class="muted" id="rec-state">In your own language: landmarks, turns, gate colour, floor.</div></div>
       </div>
-      <audio id="rec-audio" controls class="hidden"></audio>
       <p class="label" style="margin-top:12px">Your words <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· check and correct them</span></p>
       <textarea id="words" rows="3" placeholder="Your directions appear here as you speak. You can also type them."></textarea>
       <p class="muted" id="words-src" style="margin:6px 0 0">Your words appear here as you speak.</p>
@@ -125,7 +124,7 @@
       <ul class="steps" id="o-steps"></ul>
     </div>
     <div id="o-asks"></div>
-    <div class="card"><p class="label">Your voice directions</p><audio id="o-audio" controls></audio><div class="muted" id="o-lang"></div></div>
+    <div class="card"><p class="label">Your directions</p><div id="o-note" style="font-size:16px"></div><audio id="o-audio" controls class="hidden"></audio><div class="muted" id="o-lang"></div></div>
     <button class="btn ghost" id="new">Order again</button>
   </main>
 
@@ -187,107 +186,55 @@
     }
 
     // Voice directions: recorded with the microphone only (works offline). The rider's phone turns them into a route.
-    // Her words, live, in the language she chose, while she records her voice note.
-    // Phones differ: some let the page record and recognise from the same microphone, others give the microphone to
-    // only one of them. So words come first: recognition is fed the recording's own audio track where the browser
-    // supports it; if no words arrive within a few seconds, the voice recording stops and recognition gets the
-    // microphone alone (she is asked to say it once more). Her checked words are what the rider's route is built from.
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const LOCALE = { ta: 'ta-IN', hi: 'hi-IN', kn: 'kn-IN', ml: 'ml-IN', bn: 'bn-IN', en: 'en-IN', tanglish: 'ta-IN', hinglish: 'hi-IN' };
-    const WORDS_HINT = 'Your words appear here as you speak.';
-    let session = null; // { recog, rec, stream, words, gotWords, wordsOnly, timer, watchdog, t0 }
-
-    function say(msg) { $('#words-src').textContent = msg; }
-    function startRecognition(track) {
-      const S = session;
-      if (!SR || !S) return;
-      const r = new SR();
-      r.lang = LOCALE[$('#lang').value] || 'en-IN';
-      r.interimResults = true;
-      r.continuous = true;
-      r.onspeechstart = () => say('Hearing you…');
-      r.onresult = (e) => {
-        let interim = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript.trim();
-          if (e.results[i].isFinal) S.words += t + ' ';
-          else interim += t + ' ';
-        }
-        const text = (S.words + interim).trim();
-        if (text) { S.gotWords = true; $('#words').value = text; say(WORDS_HINT); }
-      };
-      r.onerror = (e) => {
-        if (e.error === 'audio-capture' && !S.wordsOnly) return wordsOnly();       // microphone taken by the recorder
-        if (e.error === 'network') say('Words need an internet connection: please type them.');
-        else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') say('Allow the microphone for this site to see your words, or type them.');
-        else if (e.error === 'language-not-supported') say('Words are not available for this language here: please type them.');
-      };
-      r.onend = () => { if (session === S && S.recog === r) setTimeout(() => { if (session === S && S.recog === r) { try { r.start(track); } catch {} } }, 150); };
-      S.recog = r;
-      try { track ? r.start(track) : r.start(); } catch { try { r.start(); } catch {} }
-    }
-
-    // No words while recording: give the microphone to recognition alone.
-    function wordsOnly() {
-      const S = session;
-      if (!S || S.wordsOnly) return;
-      S.wordsOnly = true;
-      const old = S.recog; S.recog = null; try { old?.abort(); } catch {}
-      if (S.rec && S.rec.state !== 'inactive') { S.dropAudio = true; S.rec.stop(); }
-      S.stream?.getTracks().forEach((t) => t.stop());
-      $('#rec-title').textContent = 'Listening for your words';
-      say('Please say your directions once more: your words will appear here.');
-      setTimeout(() => startRecognition(null), 300);
-    }
-
-    function stopSession() {
-      const S = session;
-      if (!S) return;
-      session = null;
-      clearInterval(S.timer); clearTimeout(S.watchdog);
-      const r = S.recog; S.recog = null; try { r?.stop(); } catch {}
-      if (S.rec && S.rec.state !== 'inactive') S.rec.stop();
-      else S.stream?.getTracks().forEach((t) => t.stop());
+    // Her words, live, as she speaks, in the language she chose. Same speech recognition as the Pahunch app's own mic
+    // (js/voice.js), phrase after phrase until she taps the mic again. On phones the microphone can't be shared with a
+    // recording at the same moment, so the page only listens: her checked words are what the rider's route is built from.
+    let voice = null, listening = false, base = '';
+    const say = (msg) => ($('#words-src').textContent = msg);
+    function stopListening() {
+      listening = false;
+      voice?.dictate.stop?.();
       $('#mic').classList.remove('live');
-      $('#rec-title').textContent = $('#words').value.trim() ? 'Directions captured' : 'Record voice directions';
-      $('#rec-state').textContent = $('#words').value.trim() ? 'Check your words below, then place the order. Tap the mic to add more.' : 'Tap the mic and speak.';
-      if ($('#words').value.trim()) say(WORDS_HINT + ' Correct anything that is wrong.');
+      const has = !!$('#words').value.trim();
+      $('#rec-title').textContent = has ? 'Directions captured' : 'Speak your directions';
+      $('#rec-state').textContent = has ? 'Check your words below, then place the order. Tap the mic to add more.' : 'Tap the mic and speak.';
     }
-
-    $('#mic').onclick = async () => {
-      if (session) return stopSession();
+    async function listenLoop() {
+      try { voice ||= await import('./js/voice.js'); } catch { say('Please type your directions.'); return stopListening(); }
+      if (!voice.voiceAvailable) { say('This browser cannot listen: please type your directions.'); return stopListening(); }
+      let quiet = 0;
+      while (listening) {
+        try {
+          const t = await voice.dictate($('#lang').value, (p) => { if (listening) { $('#words').value = (base + p).trim(); say('Hearing you…'); } });
+          if (t) { base += t.trim() + ' '; $('#words').value = base.trim(); quiet = 0; say('Keep going, or tap the mic when you are done.'); }
+          else if (listening && ++quiet >= 2) { say(base.trim() ? 'Done listening. Check your words, correct anything that is wrong.' : "Didn't hear anything. Tap the mic and speak."); break; }
+        } catch (e) {
+          if (e.code === 'no-speech' && listening && ++quiet < 2) continue;
+          say(e.code === 'no-speech' ? (base.trim() ? 'Done listening. Check your words, correct anything that is wrong.' : "Didn't hear anything. Tap the mic and speak.")
+            : e.code === 'network' ? 'Your words need an internet connection: check your data, or type them.'
+            : e.code === 'not-allowed' || e.code === 'service-not-allowed' ? 'Allow the microphone for this site, or type your directions.'
+            : e.code === 'language-not-supported' ? 'This language is not available here: please type your directions.'
+            : "Couldn't hear you. Try again, or type your directions.");
+          break;
+        }
+      }
+      stopListening();
+    }
+    $('#mic').onclick = () => {
+      if (listening) return stopListening();
       if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'First choose the language you will speak in.'; return; }
-      const S = session = { words: $('#words').value.trim() ? $('#words').value.trim() + ' ' : '', gotWords: false, wordsOnly: false, t0: Date.now() };
+      listening = true;
+      base = $('#words').value.trim() ? $('#words').value.trim() + ' ' : '';
       $('#mic').classList.add('live');
       $('#rec-title').textContent = 'Listening';
+      $('#rec-state').textContent = 'Speak now · tap the mic when you are done';
       say('Listening for your words…');
-      S.timer = setInterval(() => { if (session === S) $('#rec-state').textContent = `${S.wordsOnly ? 'Listening' : 'Recording'}… ${Math.round((Date.now() - S.t0) / 1000)} s · tap to stop`; }, 500);
-      let track = null;
-      try {
-        S.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-        track = S.stream.getAudioTracks()[0];
-        const chunks = [];
-        S.rec = new MediaRecorder(S.stream);
-        S.rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-        S.rec.onstop = () => {
-          S.stream.getTracks().forEach((t) => t.stop());
-          if (S.dropAudio || !chunks.length) return;
-          const blob = new Blob(chunks, { type: S.rec.mimeType || 'audio/webm' });
-          const fr = new FileReader();
-          fr.onload = () => { audioUrl = fr.result; $('#rec-audio').src = audioUrl; $('#rec-audio').classList.remove('hidden'); };
-          fr.readAsDataURL(blob);
-        };
-        S.rec.start();
-      } catch (e) { S.rec = null; track = null; }
-      if (!SR) { say('This browser cannot show your words: please type them.'); return; }
-      startRecognition(track);
-      // Words must start arriving soon after she starts speaking; otherwise recognition gets the microphone alone.
-      S.watchdog = setTimeout(() => { if (session === S && !S.gotWords && S.rec) wordsOnly(); }, 6000);
+      listenLoop();
     };
 
     $('#place').onclick = async () => {
-      if (session) stopSession();
-      if (!audioUrl && !$('#words').value.trim()) { $('#rec-state').textContent = 'Please record (or type) your directions first.'; return; }
+      if (listening) stopListening();
+      if (!$('#words').value.trim()) { $('#rec-state').textContent = 'Please speak (or type) your directions first.'; return; }
       if ($('#lang').value === 'auto') { $('#lang').focus(); $('#rec-state').textContent = 'Choose the language you spoke in.'; return; }
       const items = [...cart].map(([id, q]) => ({ name: PRODUCTS[id].name, q, price: PRODUCTS[id].price }));
       const order = { customer: 'Priya S.', phone: '+91 98xxx xx210', address: 'Flat 2B, 4th Cross, Indiranagar', items, total: items.reduce((a, i) => a + i.price * i.q, 0), lang: $('#lang').value, note: $('#words').value.trim(), audio: audioUrl };
@@ -315,7 +262,8 @@
         $('#o-id').textContent = `#${o.id}`;
         $('#o-head').textContent = STEPS[Math.max(0, k)][1];
         $('#o-steps').replaceChildren(...STEPS.map(([s, t], i) => { const li = el('li', i < k || o.status === 'delivered' ? 'done' : i === k ? 'now' : ''); li.append(el('i'), el('span', null, t)); return li; }));
-        if (o.audio && shownAudio !== o.audio) { shownAudio = o.audio; $('#o-audio').src = o.audio; }
+        if (o.audio && shownAudio !== o.audio) { shownAudio = o.audio; $('#o-audio').src = o.audio; $('#o-audio').classList.remove('hidden'); }
+        $('#o-note').textContent = o.note || '';
         $('#o-lang').textContent = `Spoken in ${LANG_NAME[o.lang] || o.lang}. Your rider gets it in their language.`;
         const msgs = o.messages || [];
         const asks = msgs.filter((m) => m.from === 'rider');
@@ -341,7 +289,7 @@
     }
     $('#cartbar').onclick = openCheckout;
     $('#back').onclick = () => $('#checkout').classList.add('hidden');
-    $('#new').onclick = () => { orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#rec-audio').classList.add('hidden'); $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
+    $('#new').onclick = () => { orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
     try { orderId = localStorage.getItem('instakart.order'); } catch {}
     renderShop();
     if (orderId) showTrack();

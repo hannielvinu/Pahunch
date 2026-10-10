@@ -22,8 +22,9 @@ whose answer the rider can understand.
 
 ## The demo: Instakart → Pahunch
 1. **Customer** opens `instakart.html` (a demo quick-commerce shop, not a real brand), adds items, picks the language she
-   speaks, and **records voice directions**. Her words appear live as she speaks (Chrome's Google speech recognition,
-   online at order time) and she corrects them before placing the order. The order carries her checked words + voice.
+   speaks, and **records voice directions**. Her words appear live as she speaks (Chrome's speech recognition, the same as Pahunch's
+   online mic; online at order time) and she corrects them before placing the order. The order carries her checked words
+   (on phones the page can't record audio while recognising, so the shop listens only).
 2. **Rider** (Pahunch, on the phone): the order pops up on the home screen → **Accept**. Her words are **translated to
    English on the phone** (Gemma 3n, a translation prompt that keeps names, turns, ordinals, colours and floors exact),
    the route is read from the English and **cross-checked against her own words** (directions and ordinals she said win),
