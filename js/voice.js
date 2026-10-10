@@ -7,22 +7,29 @@ export const voiceAvailable = !!SR;
 const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN' };
 
 // One-shot dictation. onPartial gets the live transcript; resolves with the final text.
-export function dictate(lang = 'en', onPartial) {
+export function dictate(lang = 'en', onPartial, onState) {
   return new Promise((resolve, reject) => {
     if (!SR) return reject(new Error('speech recognition not available in this browser'));
     const r = new SR();
     r.lang = RECOG_LANG[lang] || 'en-IN';
     r.interimResults = true;
     r.continuous = false;
-    let text = '';
+    let text = '', finished = false;
+    const finish = () => { if (finished) return; finished = true; clearTimeout(idle); resolve(text.trim()); };
+    // Nothing recognised for 8 s: stop instead of waiting forever.
+    let idle = setTimeout(() => { try { r.stop(); } catch {} setTimeout(finish, 800); }, 8000);
+    r.onstart = () => onState?.('Mic on · speak now');
+    r.onspeechstart = () => onState?.('Hearing you…');
     r.onresult = (e) => {
+      clearTimeout(idle);
+      idle = setTimeout(() => { try { r.stop(); } catch {} setTimeout(finish, 800); }, 4000);
       text = [...e.results].map((x) => x[0].transcript).join(' ');
       onPartial?.(text);
     };
-    r.onerror = (e) => reject(new Error(e.error === 'network' ? 'speech needs internet on this phone' : e.error));
-    r.onend = () => resolve(text.trim());
-    r.start();
-    dictate.stop = () => r.stop();
+    r.onerror = (e) => { if (finished) return; finished = true; clearTimeout(idle); reject(new Error(e.error === 'network' ? 'online speech needs internet (offline voice: run tools/get-whisper.sh)' : e.error === 'no-speech' ? 'no speech heard' : e.error)); };
+    r.onend = finish;
+    dictate.stop = () => { try { r.stop(); } catch {} setTimeout(finish, 1500); }; // Done always returns
+    try { r.start(); } catch (err) { finished = true; reject(err); }
   });
 }
 

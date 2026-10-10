@@ -540,7 +540,7 @@ $('#mic').onclick = async () => {
       // Offline, on-device Whisper: real waveform, live transcript, any language -> English for the parser.
       sheet.classList.add('offline');
       $('#vtitle').textContent = 'Listening · on-device';
-      const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; } });
+      const rec = listen({ canvas: $('#vwave'), onPartial: (t) => { sheet.classList.add('speaking'); $('#vlive').textContent = t; }, onState: (m) => ($('#vtitle').textContent = m) });
       micStop = rec.stop;
       const r = await rec.done;
       if (r.text) {
@@ -551,7 +551,7 @@ $('#mic').onclick = async () => {
     } else {
       $('#vtitle').textContent = 'Listening…';
       micStop = () => dictate.stop?.();
-      const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; });
+      const textOut = await dictate('en', (p) => { sheet.classList.add('speaking'); $('#vlive').textContent = p; $('#note').value = p; }, (m) => ($('#vtitle').textContent = m));
       if (textOut) { $('#note').value = textOut; status.hidden = true; } else { status.hidden = false; status.textContent = 'Didn’t catch that. Tap the mic and try again.'; }
     }
   } catch (e) { status.hidden = false; status.textContent = `Voice: ${e.message}. Type instead, or run tools/get-whisper.sh for offline voice.`; }

@@ -33,20 +33,20 @@ function toWav16k(chunks, rate) {
   return new Blob([buf], { type: 'audio/wav' });
 }
 
-async function transcribe(wav, translate) {
+async function transcribe(wav, translate, ms = 20000) {
   const f = new FormData();
   f.append('file', wav, 'speech.wav');
   f.append('temperature', '0');
   f.append('response_format', 'json');
   if (translate) f.append('translate', 'true');
-  const r = await fetch(URL_STT, { method: 'POST', body: f });
+  const r = await fetch(URL_STT, { method: 'POST', body: f, signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error(`speech server ${r.status}`);
   const j = await r.json();
   return (j.text || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim(); // drop [BLANK_AUDIO], (music)…
 }
 
 // opts: { canvas, onPartial(text), onLevel(0..1) } -> { stop(), done: Promise<{ text, original, ms }> }
-export function listen({ canvas, onPartial } = {}) {
+export function listen({ canvas, onPartial, onState } = {}) {
   let stopFn;
   const done = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
@@ -101,9 +101,12 @@ export function listen({ canvas, onPartial } = {}) {
     const wav = toWav16k(chunks, ctx.sampleRate);
     ctx.close();
     if (!spoke) return { text: '', original: '', ms: 0 };
+    onState?.('Transcribing on this phone…');
     const t0 = performance.now();
-    const [orig, english] = await Promise.all([transcribe(wav, false), transcribe(wav, true)]);
-    return { text: english || orig, original: orig || original, ms: Math.round(performance.now() - t0) };
+    // One final pass in English (for the parser); the live transcript already holds the original words.
+    let english = '';
+    try { english = await transcribe(wav, true); } catch (e) { if (!original) throw e; }
+    return { text: english || original, original, ms: Math.round(performance.now() - t0) };
   })();
   return { stop: () => stopFn?.(), done };
 }
