@@ -20,6 +20,15 @@ GPU_BIN="$HOME/llama.cpp/build/bin/llama-server"
 if [ -f "$MODEL" ] && { [ -n "$CPU_BIN" ] || [ -x "$GPU_BIN" ]; }; then
   pkill -f llama-server 2>/dev/null
   STARTED=""
+  # NPU=1: the Hexagon NPU build (bash tools/get-npu.sh). Falls back to the GPU/CPU paths below if it doesn't start.
+  NPU_DIR="$HOME/llama-npu"
+  if [ "${NPU:-0}" = "1" ] && [ -x "$NPU_DIR/bin/llama-server" ]; then
+    LD_LIBRARY_PATH="$NPU_DIR/lib:/vendor/lib64" ADSP_LIBRARY_PATH="$NPU_DIR/lib" "$NPU_DIR/bin/llama-server" -m "$MODEL" --host 127.0.0.1 --port 8081 -c 2048 -t ${LLAMA_THREADS:-6} --device HTP0 -ngl 99 > llama.log 2>&1 &
+    LLAMA=$!
+    echo "On-device LLM starting on the Hexagon NPU…"
+    if wait_llm 90; then STARTED="Hexagon NPU"; echo npu > .llm-device; else echo "NPU build did not start (see llama-npu.log); using CPU."; kill "$LLAMA" 2>/dev/null; cp llama.log llama-npu.log 2>/dev/null; fi
+  fi
+  [ -z "$STARTED" ] && rm -f .llm-device
   # Try the Adreno GPU (OpenCL) build first if it exists (GPU=0 skips it); fall back to the CPU build.
   # The vendor library path is set for this one process only.
   if [ "${GPU:-0}" = "1" ] && [ -x "$GPU_BIN" ]; then  # off by default: the OpenCL build crashes on this phone (GPU=1 to retry)

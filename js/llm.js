@@ -339,6 +339,10 @@ export async function warmNative() {
     return modelName((await r.json()).data?.[0]?.id);
   } catch { return 'on-device LLM'; }
 }
+// Where llama-server runs: tools/start.sh writes .llm-device ("npu") when the Hexagon NPU build started.
+export async function llmDevice() {
+  try { const r = await fetch('.llm-device', { cache: 'no-store' }); return r.ok && (await r.text()).trim() === 'npu' ? 'Hexagon NPU' : 'CPU'; } catch { return 'CPU'; }
+}
 export function modelName(id = '') {
   const f = id.split(/[\\/]/).pop().toLowerCase();
   if (f.includes('gemma-3n')) return 'Gemma 3n E2B';

@@ -1,6 +1,6 @@
 import { blocked, guard } from './guard.js'; // first: refuses any request that would leave the phone
 import { SAMPLES, describe, parseRules, verifyFor, isRoute, routeWords, leftovers } from './parser.js';
-import { parseNote, warmNative, complete, agrees, translateLine } from './llm.js';
+import { parseNote, warmNative, complete, agrees, translateLine, llmDevice } from './llm.js';
 import { Vision, matchSigns, ocrLangs, distinctive } from './vision.js';
 import { Overlay } from './overlay.js';
 import { startNetMeter, formatBytes } from './netmeter.js';
@@ -177,7 +177,7 @@ function renderPlan() {
   const ai = st ? `${st.model} · ${st.backend} · ${(st.ms / 1000).toFixed(1)} s · ${st.tokensIn ?? '?'}→${st.tokensOut ?? '?'} tokens · ${st.tps ? st.tps.toFixed(1) : '?'} tok/s` : '';
   const usedAI = g.parser === 'llm' && st && !p.fallback;
   $('#parsed-by').textContent = usedAI
-    ? `Understood on this phone in ${(st.ms / 1000).toFixed(1)} s · on-device AI (${st.model.replace(/.gguf$/, '')})`
+    ? `Understood on this phone in ${(st.ms / 1000).toFixed(1)} s · on-device AI (${st.model.replace(/.gguf$/, '')}${state.llmDevice ? ` · ${state.llmDevice}` : ''})`
     : `Understood on this phone in ${g.ms} ms · rule engine${p.sure ? ' (every word understood, AI not needed)' : ''}${p.fallback && p.fallback !== 'no on-device model running' ? ' (AI answer unclear)' : p.fallback ? ' (AI model not running)' : ''}`;
   if (false) $('#parsed-by').textContent = g.parser === 'llm' && st
     ? `Route read on this phone by ${ai} · turns and floor checked against the note · language: ${g.lang}`
@@ -1305,7 +1305,7 @@ async function boot() {
   const jobs = LITE ? ['camera', 'ocr', 'llm', 'sensors'].map((k) => Promise.resolve(mark(k, true, 'preview'))) : [
     Promise.all([detector.load(), scene.load().catch(() => null)]).then(() => mark('camera', true, `objects + places · ${detector.delegate}`), () => mark('camera', false, 'unavailable')),
     new Promise((r) => (window.Tesseract ? r() : addEventListener('load', r, { once: true }))).then(() => vision.loadOcr('eng')).then(() => mark('ocr', true, 'Tesseract · English, Indian scripts on demand'), () => mark('ocr', false, 'failed')),
-    warmNative().then((name) => mark('llm', !!name, name ? `${name} · llama.cpp` : 'rules only (start.sh)')),
+    warmNative().then(async (name) => { state.llmDevice = name ? await llmDevice() : null; mark('llm', !!name, name ? `${name} · ${state.llmDevice}` : 'rules only (start.sh)'); }),
     new Promise((r) => setTimeout(r, 900)).then(() => mark('sensors', !!(sensors.gyro || compass.heading != null || sensors.pos), sensors.gyro ? 'gyro ✓ compass ✓' : 'limited')),
   ];
   await Promise.race([Promise.allSettled(jobs), new Promise((r) => setTimeout(r, 9000))]);
