@@ -114,6 +114,7 @@ function tokens(clause) {
 
 function detectLang(text) {
   if (/[ഀ-ൿ]/.test(text)) return 'ml';
+  if (/[ঀ-৿]/.test(text)) return 'bn';
   if (/[ऀ-ॿ]/.test(text)) return 'hi';
   if (/[ಀ-೿]/.test(text)) return 'kn';
   if (/[஀-௿]/.test(text)) return 'ta';

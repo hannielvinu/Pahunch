@@ -1,6 +1,6 @@
 // Voice prompts (en/hi/kn/ta), vibration vocabulary and the compass turn detector.
 
-const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN' };
+const VOICE_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', bn: 'bn-IN' };
 
 // Spoken guidance, colloquial (how a person on the phone would guide you), in the rider's language.
 // intro + straight start the route; spotted + now + next instruction are spoken as one sentence.
@@ -39,6 +39,13 @@ const TEXT = {
     turn: (o, d) => `${['', 'ഒന്നാമത്തെ', 'രണ്ടാമത്തെ', 'മൂന്നാമത്തെ', 'നാലാമത്തെ'][o] || o} റോഡിൽ ${d} തിരിയൂ.`,
     turned: 'കൊള്ളാം, തിരിഞ്ഞു.', arrived: (f) => `എത്തി! ഇതാണ് വീട്.${f != null ? ` ${f === 0 ? 'താഴത്തെ നില' : `${f}-ാം നില`}.` : ''}`,
     now: 'ഇനി', left: 'ഇടത്തോട്ട്', right: 'വലത്തോട്ട്', dest: 'സ്ഥലം',
+  },
+  bn: {
+    intro: 'ঠিক আছে, চলুন।', straight: 'প্রথমে সোজা যান।',
+    look: (x) => `${x} দেখতে থাকুন।`, spotted: (x) => `হ্যাঁ, ঠিক আছে! ${x} এসে গেছে।`, ask: (x) => `এটাই কি ${x}?`,
+    turn: (o, d) => `${['', 'প্রথম', 'দ্বিতীয়', 'তৃতীয়', 'চতুর্থ'][o] || o} গলিতে ${d} ঘুরুন।`,
+    turned: 'দারুণ, ঘুরে গেছেন।', arrived: (f) => `পৌঁছে গেছেন! এটাই দরজা।${f != null ? ` ${f === 0 ? 'গ্রাউন্ড ফ্লোর' : `${f} তলা`}।` : ''}`,
+    now: 'এবার', left: 'বাঁদিকে', right: 'ডানদিকে', dest: 'গন্তব্য',
   },
 };
 
@@ -138,6 +145,8 @@ export class TurnDetector {
 
 // Landmark words in the rider's language, so a Tamil sentence says "நீல கேட்", not "blue gate".
 const LOCAL = {
+  bn: { temple: 'মন্দির', pharmacy: 'মেডিকেল', gate: 'গেট', house: 'বাড়ি', store: 'দোকান', bus_stop: 'বাস স্টপ', school: 'স্কুল', hospital: 'হাসপাতাল', bank: 'ব্যাংক', petrol: 'পেট্রোল পাম্প', park: 'পার্ক', mosque: 'মসজিদ', church: 'গির্জা', apartment: 'অ্যাপার্টমেন্ট',
+    blue: 'নীল', red: 'লাল', green: 'সবুজ', yellow: 'হলুদ', white: 'সাদা', black: 'কালো', orange: 'কমলা', pink: 'গোলাপি', brown: 'বাদামি', grey: 'ধূসর' },
   hi: { temple: 'मंदिर', pharmacy: 'मेडिकल', gate: 'गेट', house: 'घर', store: 'दुकान', bus_stop: 'बस स्टॉप', school: 'स्कूल', hospital: 'अस्पताल', bank: 'बैंक', petrol: 'पेट्रोल पंप', park: 'पार्क', mosque: 'मस्जिद', church: 'चर्च', apartment: 'अपार्टमेंट',
     blue: 'नीला', red: 'लाल', green: 'हरा', yellow: 'पीला', white: 'सफ़ेद', black: 'काला', orange: 'नारंगी', pink: 'गुलाबी', brown: 'भूरा', grey: 'स्लेटी' },
   ta: { temple: 'கோவில்', pharmacy: 'மெடிக்கல்', gate: 'கேட்', house: 'வீடு', store: 'கடை', bus_stop: 'பஸ் ஸ்டாப்', school: 'ஸ்கூல்', hospital: 'ஆஸ்பத்திரி', bank: 'பேங்க்', petrol: 'பெட்ரோல் பங்க்', park: 'பார்க்', mosque: 'மசூதி', church: 'சர்ச்', apartment: 'அபார்ட்மென்ட்',

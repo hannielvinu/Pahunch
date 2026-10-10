@@ -10,7 +10,7 @@ export function localSpeechSupported() {
   try { return !!SR && 'processLocally' in new SR(); } catch { return false; }
 }
 
-const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', tanglish: 'ta-IN', hinglish: 'hi-IN', auto: 'en-IN' };
+const RECOG_LANG = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', ml: 'ml-IN', bn: 'bn-IN', tanglish: 'ta-IN', hinglish: 'hi-IN', auto: 'en-IN' };
 export const localeFor = (lang) => RECOG_LANG[lang] || 'en-IN';
 
 // Chrome's on-device speech recognition (Google's models, downloaded per language, runs with no network).

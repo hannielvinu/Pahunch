@@ -40,6 +40,12 @@ const MAP = {
   അമ്പലം: 'temple', ക്ഷേത്രം: 'temple', പള്ളി: 'church', ഗേറ്റ്: 'gate', വീട്: 'house', വീട്ടി: 'house', കട: 'store', മെഡിക്കൽ: 'pharmacy', സ്കൂൾ: 'school',
   ആശുപത്രി: 'hospital', ബാങ്ക്: 'bank', ബസ്: 'bus', എതിരെ: 'saamne', എതിർവശ: 'saamne', അടുത്ത്: 'paas', സമീപം: 'paas', കഴിഞ്ഞ്: 'baad', പിന്നെ: 'phir',
   റോഡ്: 'road', വഴി: 'road', നില: 'floor', പച്ച: 'green', നീല: 'blue', ചുവന്ന: 'red', ചുവപ്പ്: 'red', മഞ്ഞ: 'yellow', വെള്ള: 'white', കറുത്ത: 'black', തിരിയ: 'turn',
+  // ---- Bengali
+  বাঁদিকে: 'left', বাঁদিক: 'left', বাঁয়ে: 'left', বামে: 'left', বাঁ: 'left', লেফট: 'left', ডানদিকে: 'right', ডানদিক: 'right', ডানে: 'right', ডান: 'right', রাইট: 'right',
+  সোজা: 'straight', প্রথম: 'first', দ্বিতীয়: 'second', তৃতীয়: 'third', চতুর্থ: 'fourth',
+  মন্দির: 'temple', মসজিদ: 'mosque', গির্জা: 'church', গেট: 'gate', বাড়ি: 'house', দোকান: 'store', মেডিকেল: 'pharmacy', ওষুধের: 'pharmacy', স্কুল: 'school', হাসপাতাল: 'hospital', ব্যাংক: 'bank', পার্ক: 'park',
+  সামনে: 'saamne', উল্টোদিকে: 'saamne', পাশে: 'bagal', কাছে: 'paas', পরে: 'baad', পেরিয়ে: 'baad', তারপর: 'phir', গলি: 'gali', রাস্তা: 'road', তলা: 'floor', তলায়: 'floor',
+  নীল: 'blue', সবুজ: 'green', লাল: 'red', হলুদ: 'yellow', সাদা: 'white', কালো: 'black', ঘুরুন: 'turn', যান: 'go', আসুন: 'aao',
   // ---- filler words (come / go / there / that / is…) mapped to words the parser already ignores
   எடு: 'edu', திரும்ப: 'turn', போயி: 'poi', ஒரு: 'oru', அங்கே: 'there', வந்து: 'vandhu', இருந்து: 'irundhu',
   आगे: 'aage', जाकर: 'jakar', जाके: 'jaake', चलिए: 'chaliye', चलो: 'chalo', मुड़िए: 'mudiye',
