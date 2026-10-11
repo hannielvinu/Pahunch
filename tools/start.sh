@@ -84,6 +84,17 @@ fi
 pkill -f stt-bridge.py 2>/dev/null
 
 pkill -f "http.server 8080" 2>/dev/null; pkill -f "serve.py 8080" 2>/dev/null
+# Instakart from another device (same Wi-Fi or this phone's hotspot): the mic needs https there, so make a local
+# certificate once (pkg install openssl-tool) and print the address to open.
+if [ ! -f .cert/pahunch.pem ] && command -v openssl >/dev/null; then
+  mkdir -p .cert && openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN=Pahunch demo"     -keyout .cert/pahunch.key -out .cert/pahunch.pem >/dev/null 2>&1 && echo "Made a local certificate for https (other devices)."
+fi
+IP=$(python -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("10.255.255.255", 1)); print(s.getsockname()[0])' 2>/dev/null)
+if [ -f .cert/pahunch.pem ]; then
+  echo "Instakart on another device: https://${IP:-<phone-ip>}:8443/instakart.html  (accept the browser warning once)"
+else
+  echo "For Instakart on another device: pkg install openssl-tool, then run start.sh again."
+fi
 if [ "${1:-}" = "--bg" ]; then
   # Background mode: everything keeps running after this script returns (stop with: bash tools/stop.sh)
   nohup python tools/serve.py 8080 > http.log 2>&1 &

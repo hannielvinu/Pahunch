@@ -10,7 +10,10 @@ Order store (demo; files in orders/, on this phone):
   GET  /api/orders                  newest first, without the audio (audio is at orders/<id>.<ext>)
   POST /api/orders/<id>/status      {status}         placed -> accepted -> arrived -> delivered
   POST /api/orders/<id>/messages    {from, ...}      rider question / customer answer
-Usage: python tools/serve.py [port]
+Another device on the same Wi-Fi / hotspot (e.g. Instakart on a second phone or a laptop): browsers allow the
+microphone only on secure pages, so an https listener runs too (port 8443) when tools/start.sh has made the local
+certificate in .cert/. Open https://<this phone's IP>:8443/instakart.html there and accept the warning once.
+Usage: python tools/serve.py [port] [https port]
 """
 import base64
 import json
@@ -22,6 +25,8 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CERT = os.path.join(ROOT, ".cert", "pahunch.pem")
+KEY = os.path.join(ROOT, ".cert", "pahunch.key")
 ORDERS = os.path.join(ROOT, "orders")
 AUDIO_EXT = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav"}
 
@@ -109,5 +114,15 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    tls_port = int(sys.argv[2]) if len(sys.argv) > 2 else 8443
+    if os.path.exists(CERT) and os.path.exists(KEY):
+        import ssl
+        import threading
+        secure = ThreadingHTTPServer(("", tls_port), partial(Handler, directory=ROOT))
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(CERT, KEY)
+        secure.socket = ctx.wrap_socket(secure.socket, server_side=True)
+        threading.Thread(target=secure.serve_forever, daemon=True).start()
+        print(f"Secure (for other devices): https://<this device's IP>:{tls_port}/instakart.html")
     print(f"Pahunch app on http://localhost:{port}  ·  Instakart demo shop: /instakart.html")
     ThreadingHTTPServer(("", port), partial(Handler, directory=ROOT)).serve_forever()

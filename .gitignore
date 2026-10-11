@@ -16,3 +16,4 @@ llama-model.log
 stt-bridge.log
 .llm-device
 orders/
+.cert/
