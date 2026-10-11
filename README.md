@@ -8,8 +8,7 @@ whose answer the rider can understand.
 
 *Pahunch only says what it can stand behind: checked phrases, answerable questions, a tick only on a sign it read.*
 
-- **Voice note in:** handed over by a partner app at the last 100 m, shared from WhatsApp, or opened as a file;
-  transcribed on the phone (Whisper, with timings). No third-party AI hears the customer.
+- **Voice note in:** handed over by a partner app at the last 100 m, transcribed on the phone (Whisper, with timings). No third-party AI hears the customer.
 - **Steps in the rider's language,** English underneath. Each step has **▶ hear it**, the 2–3 s of the customer's
   own voice it came from. Anything not turned into a step is shown under **Customer also said**, in her words.
 - **Honest checks:** ✓ only for a distinctive signboard name the camera read (across scripts: a Tamil name matches an
