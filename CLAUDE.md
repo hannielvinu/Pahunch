@@ -1,8 +1,10 @@
 # Pahunch: context for Claude (iQOO Hackathon 2026 Grand Finale, Mobility track)
 
-**"Maps get you to the lane. Pahunch gets you to the door."** Spoken landmark directions (English / Hindi / Tamil /
-Kannada / Malayalam, code-mixed) → route steps → camera-verified voice + haptic guidance to the exact door, on the
-phone, offline. Every arrival saves a door card (DIGIPIN, photo, floor, route, QR). Full feature list: README.md.
+**"Maps get you to the lane. Pahunch gets you to the door."** Final idea: the language bridge for the last 100 metres.
+Instakart (demo shop) order with the customer's spoken directions → Pahunch translates them to English on the phone
+(Gemma 3n), reads the route, cross-checks it against her own words, shows steps in the rider's language, guides by
+camera/voice/cards/vibration, and arrival marks the order Delivered. Door cards, the question card, emergency mode and
+door memory are still in the code but out of the pitch. Full description: README.md.
 
 Builder: **Hanniel Vinu** (solo), github `hannielvinu`. Repo: github.com/hannielvinu/Pahunch (`Pahunch-old` is the
 Phase 1 prototype: never copy from it).
