@@ -123,6 +123,7 @@
         <p class="muted" id="words-src"></p>
       </div>
       <button class="typelink" id="type-instead">Type instead</button>
+      <pre id="debug" hidden style="white-space:pre-wrap;font-size:11px;color:#6b7280;max-height:160px;overflow:auto;margin:8px 0 0"></pre>
     </div>
     <button class="btn" id="place">Place order</button>
     <button class="btn ghost" id="back" style="margin-top:8px">Back to shop</button>
@@ -252,40 +253,73 @@
       stopListening();
     }
     // ---- Speak once: her voice is recorded and her words appear ----
-    // 1) Where the browser lets recognition use the recording's own microphone stream, words appear live while she speaks.
-    // 2) Where the phone gives the microphone to only one of them, her voice keeps recording; when she stops, the recording
-    //    is played into recognition so her words appear right after. She speaks only once.
-    // 3) If no words came either way, the next tap listens only (the path that always works).
+    // Recognition runs one utterance per session, restarted (the pattern that is reliable on Android; Chrome's
+    // "continuous" mode repeats earlier words inside later results there). It is fed the recording's own microphone
+    // track where the browser supports that, so recording and words share one microphone.
+    // If the phone still gives the microphone to the recording only, that is detected from her voice level on the
+    // recording (she clearly spoke, recognition heard nothing): her voice keeps recording, and when she stops the
+    // recording is played (full volume) into recognition so her words appear right after. She speaks once.
+    // If no words came either way, the next tap listens only (the path that always works).
     const SRX = window.SpeechRecognition || window.webkitSpeechRecognition;
     const LOCALE = { ta: 'ta-IN', hi: 'hi-IN', kn: 'kn-IN', ml: 'ml-IN', bn: 'bn-IN', en: 'en-IN', tanglish: 'ta-IN', hinglish: 'hi-IN' };
+    const DEBUG = /[?&]debug\b/.test(location.search), T0 = performance.now();
+    const log = (m) => { if (!DEBUG) return; const d = $('#debug'); d.hidden = false; d.textContent += `${((performance.now() - T0) / 1000).toFixed(1)}s ${m}\n`; };
     let session = null, listenOnly = false;
 
-    function recogniser(S, onEnd) {
-      const r = new SRX();
-      r.lang = LOCALE[$('#lang').value] || 'en-IN';
-      r.interimResults = true;
-      r.continuous = true;
-      // The whole result list is read each time (robust to how browsers number results); a session's final words are
-      // kept when it ends, so a restart never repeats or loses a phrase.
-      r.sessionFinal = '';
-      r.onresult = (e) => {
-        let fin = '', interim = '';
-        for (let i = 0; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript.trim();
-          if (e.results[i].isFinal) fin += t + ' '; else interim += t + ' ';
-        }
-        r.sessionFinal = fin;
-        const text = (S.base + S.final + fin + interim).trim();
-        if (text && text !== S.base.trim()) { S.got = true; showWords(); $('#words').value = text; say('Hearing you…'); }
-      };
-      r.onerror = (e) => { if (e.error === 'network') say('Your words need an internet connection: check your data, or type them.'); };
-      r.onend = () => { S.final += r.sessionFinal; r.sessionFinal = ''; onEnd(); };
-      return r;
+    // Words so far: finished utterances plus the one being heard. A browser that repeats the earlier words inside a
+    // new result is handled: a piece that extends the last one replaces it, a repeat is dropped.
+    function commit(S, t) {
+      const last = S.pieces[S.pieces.length - 1];
+      if (last && t.startsWith(last)) S.pieces[S.pieces.length - 1] = t;
+      else if (!last || !last.endsWith(t)) S.pieces.push(t);
     }
-    function startWith(r, track) { try { track ? r.start(track) : r.start(); } catch { try { r.start(); } catch {} } }
+    function showText(S, heard = '') {
+      const last = S.pieces[S.pieces.length - 1];
+      const tail = heard && !(last && last.endsWith(heard)) ? (last && heard.startsWith(last) ? heard.slice(last.length) : ' ' + heard) : '';
+      const text = (S.base + S.pieces.join(' ') + tail).replace(/\s+/g, ' ').trim();
+      if (text && text !== S.base.trim()) { S.got = true; showWords(); $('#words').value = text; }
+    }
+
+    // One utterance at a time, restarted while active(). track: a MediaStreamTrack to listen to (if supported).
+    function recognise(S, track, active) {
+      let current = null, stopped = false;
+      const one = () => {
+        if (stopped || !active()) return;
+        const r = current = new SRX();
+        r.lang = LOCALE[$('#lang').value] || 'en-IN';
+        r.interimResults = true;
+        r.continuous = false;
+        r.maxAlternatives = 1;
+        let best = '';
+        r.onsoundstart = () => { S.heard = true; log('sound'); };
+        r.onspeechstart = () => { S.heard = true; say('Hearing you…'); log('speech'); };
+        r.onresult = (e) => {
+          const t = Array.from(e.results).map((x) => x[0].transcript).join(' ').replace(/\s+/g, ' ').trim();
+          if (!t) return;
+          best = t; S.heard = true;
+          showText(S, t);
+          log(`result "${t}"`);
+        };
+        r.onerror = (e) => {
+          log('error ' + e.error);
+          if (e.error === 'network') say('Your words need an internet connection: check your data, or type them.');
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stopped = true; say('Allow the microphone for this site, or type your directions.'); }
+          if (e.error === 'language-not-supported') { stopped = true; say('This language is not available here: please type your directions.'); }
+        };
+        r.onend = () => {
+          if (best) { commit(S, best); showText(S); }
+          log('end ' + (best ? 'with words' : 'empty'));
+          if (!stopped && active()) setTimeout(one, 150); // next utterance
+        };
+        try { track ? r.start(track) : r.start(); log('start ' + (track ? 'on track' : 'on mic')); }
+        catch (err) { log('start failed ' + err.message); try { r.start(); } catch {} }
+      };
+      one();
+      return { stop() { stopped = true; try { current?.stop(); } catch {} }, abort() { stopped = true; try { current?.abort(); } catch {} } };
+    }
 
     async function startSession() {
-      const S = session = { base: $('#words').value.trim() ? $('#words').value.trim() + ' ' : '', final: '', got: false, chunks: [], t0: Date.now(), liveWords: true };
+      const S = session = { base: $('#words').value.trim() ? $('#words').value.trim() + ' ' : '', pieces: [], got: false, heard: false, chunks: [], t0: Date.now(), live: true, voiceMs: 0 };
       $('#mic').classList.add('live');
       $('#rec-title').textContent = 'Listening';
       $('#rec-state').textContent = 'Speak now · tap the mic when you are done';
@@ -295,38 +329,52 @@
         S.rec = new MediaRecorder(S.stream);
         S.rec.ondataavailable = (e) => e.data.size && S.chunks.push(e.data);
         S.rec.start(250);
-      } catch { session = null; $('#mic').classList.remove('live'); return startListenOnly(); } // no recording here: words only
+        log('recording ' + (S.rec.mimeType || ''));
+      } catch (e) { log('no recording: ' + e.message); session = null; $('#mic').classList.remove('live'); return startListenOnly(); }
       S.timer = setInterval(() => { if (session === S) $('#rec-state').textContent = `Recording · ${Math.round((Date.now() - S.t0) / 1000)} s · tap the mic when you are done`; }, 500);
       if (!SRX) return;
-      const track = S.stream.getAudioTracks()[0];
-      S.recog = recogniser(S, () => { if (session === S && S.liveWords) setTimeout(() => session === S && S.liveWords && startWith(S.recog, track), 150); });
-      startWith(S.recog, track);
-      // No words yet while recording: this phone keeps the microphone for the recording. Words come from it at the end.
-      S.watchdog = setTimeout(() => {
-        if (session !== S || S.got) return;
-        S.liveWords = false;
-        try { S.recog.abort(); } catch {}
-        say('Recording your voice. Your words will appear when you finish.');
-      }, 5000);
+      // Her voice level on the recording, to tell "not speaking yet" from "speaking but recognition hears nothing".
+      try {
+        S.ac = new (window.AudioContext || window.webkitAudioContext)();
+        S.ac.resume?.();
+        const an = S.ac.createAnalyser(); an.fftSize = 1024;
+        S.ac.createMediaStreamSource(S.stream).connect(an);
+        const buf = new Uint8Array(an.fftSize);
+        S.level = setInterval(() => {
+          an.getByteTimeDomainData(buf);
+          let e = 0; for (const v of buf) e += ((v - 128) / 128) ** 2;
+          if (Math.sqrt(e / buf.length) > 0.04) S.voiceMs += 200;
+          if (S.live && !S.heard && !S.got && S.voiceMs >= 2500) {
+            // She has clearly been speaking and recognition heard nothing: the recording holds the microphone here.
+            S.live = false;
+            S.rx?.abort();
+            log('clash: words will come from the recording');
+            say('Recording your voice. Your words will appear when you finish.');
+          }
+        }, 200);
+      } catch (e) { log('no level meter: ' + e.message); }
+      S.rx = recognise(S, S.stream.getAudioTracks()[0], () => session === S && S.live);
     }
 
-    // Her recording, played into recognition (and out loud, quietly) to get her words when they couldn't come live.
+    // Her recording, played out loud at full volume and given to recognition as a track as well, to get her words when
+    // they couldn't come live. captureStream keeps the speaker output as it is.
     function wordsFromRecording(blob, S) {
       return new Promise((resolve) => {
         const audio = new Audio(URL.createObjectURL(blob));
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const src = ctx.createMediaElementSource(audio), dest = ctx.createMediaStreamDestination(), vol = ctx.createGain();
-        vol.gain.value = 0.6;
-        src.connect(dest); src.connect(vol); vol.connect(ctx.destination);
-        const track = dest.stream.getAudioTracks()[0];
-        let done = false;
-        const finish = () => { if (done) return; done = true; try { r.stop(); } catch {} setTimeout(() => { ctx.close?.(); resolve(); }, 900); };
-        const r = recogniser(S, () => { if (!done && !audio.ended) startWith(r, track); });
-        startWith(r, track);
-        audio.onended = () => setTimeout(finish, 1500);
+        audio.volume = 1;
+        let done = false, rx = null;
+        const finish = () => { if (done) return; done = true; rx?.stop(); setTimeout(resolve, 900); };
+        audio.onplaying = () => {
+          if (rx) return;
+          let track = null;
+          try { track = (audio.captureStream?.() || audio.mozCaptureStream?.())?.getAudioTracks()[0] || null; } catch {}
+          log('replay ' + (track ? 'with track' : 'out loud only'));
+          rx = recognise(S, track, () => !done);
+        };
+        audio.onended = () => setTimeout(finish, 1800);
         audio.onerror = finish;
-        setTimeout(finish, 90000);
-        audio.play().catch(finish);
+        setTimeout(finish, 120000);
+        audio.play().catch((e) => { log('replay failed ' + e.message); finish(); });
       });
     }
 
@@ -334,15 +382,18 @@
       const S = session;
       if (!S) return;
       session = null;
-      clearInterval(S.timer); clearTimeout(S.watchdog);
-      const r = S.recog; S.recog = null; S.liveWords = false; try { r?.stop(); } catch {}
+      clearInterval(S.timer); clearInterval(S.level);
+      S.live = false; S.rx?.stop();
+      try { S.ac?.close(); } catch {}
       $('#mic').classList.remove('live');
       const blob = await new Promise((res) => { S.rec.onstop = () => res(new Blob(S.chunks, { type: S.rec.mimeType || 'audio/webm' })); S.rec.stop(); });
       S.stream.getTracks().forEach((t) => t.stop());
+      await new Promise((r) => setTimeout(r, 500)); // let the last utterance's words land
       if (blob.size) {
         audioUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
         $('#rec-audio').src = audioUrl; $('#rec-audio').classList.remove('hidden');
       }
+      log(`stopped: ${Math.round(blob.size / 1024)} KB voice, words ${S.got ? 'yes' : 'no'}`);
       if (!S.got && SRX && blob.size) {
         $('#rec-title').textContent = 'Getting your words';
         $('#rec-state').textContent = 'One moment…';
@@ -350,7 +401,7 @@
         await wordsFromRecording(blob, S);
       }
       const has = !!$('#words').value.trim();
-      listenOnly = !S.got && !has;
+      listenOnly = !has;
       $('#rec-title').textContent = has ? 'Got your directions' : 'Voice recorded';
       $('#rec-state').textContent = has ? 'Check the words below. Tap the mic to add more.' : 'Tap the mic and say it once more to see your words.';
       say(has ? 'Check your words, correct anything that is wrong.' : "Couldn't get your words from the recording. Tap the mic and say it once more.");
