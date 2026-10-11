@@ -252,78 +252,64 @@
       }
       stopListening();
     }
-    // ---- Speak once: her voice is recorded and her words appear ----
-    // Recognition runs one utterance per session, restarted (the pattern that is reliable on Android; Chrome's
-    // "continuous" mode repeats earlier words inside later results there). It is fed the recording's own microphone
-    // track where the browser supports that, so recording and words share one microphone.
-    // If the phone still gives the microphone to the recording only, that is detected from her voice level on the
-    // recording (she clearly spoke, recognition heard nothing): her voice keeps recording, and when she stops the
-    // recording is played (full volume) into recognition so her words appear right after. She speaks once.
-    // If no words came either way, the next tap listens only (the path that always works).
+    // ---- Speak once: her voice is recorded and her words appear, at the same time ----
+    // On a laptop / desktop browser the page records her voice and the browser's speech recognition hears the same
+    // microphone together, so her words appear live while her voice note records. (On Android the phone's speech
+    // service and a page recording can't hold the microphone together, so a phone shows live words only: never a
+    // "record, then speak again" step.) Tapping the mic again starts a fresh recording, from 0 s.
     const SRX = window.SpeechRecognition || window.webkitSpeechRecognition;
     const LOCALE = { ta: 'ta-IN', hi: 'hi-IN', kn: 'kn-IN', ml: 'ml-IN', bn: 'bn-IN', en: 'en-IN', tanglish: 'ta-IN', hinglish: 'hi-IN' };
+    const PHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const DEBUG = /[?&]debug\b/.test(location.search), T0 = performance.now();
     const log = (m) => { if (!DEBUG) return; const d = $('#debug'); d.hidden = false; d.textContent += `${((performance.now() - T0) / 1000).toFixed(1)}s ${m}\n`; };
-    let session = null, listenOnly = false;
+    let session = null;
 
-    // Words so far: finished utterances plus the one being heard. A browser that repeats the earlier words inside a
-    // new result is handled: a piece that extends the last one replaces it, a repeat is dropped.
-    function commit(S, t) {
-      const last = S.pieces[S.pieces.length - 1];
-      if (last && t.startsWith(last)) S.pieces[S.pieces.length - 1] = t;
-      else if (!last || !last.endsWith(t)) S.pieces.push(t);
-    }
-    function showText(S, heard = '') {
-      const last = S.pieces[S.pieces.length - 1];
-      const tail = heard && !(last && last.endsWith(heard)) ? (last && heard.startsWith(last) ? heard.slice(last.length) : ' ' + heard) : '';
-      const text = (S.base + S.pieces.join(' ') + tail).replace(/\s+/g, ' ').trim();
-      if (text && text !== S.base.trim()) { S.got = true; showWords(); $('#words').value = text; }
-    }
-
-    // One utterance at a time, restarted while active(). track: a MediaStreamTrack to listen to (if supported).
-    function recognise(S, track, active) {
-      let current = null, stopped = false;
-      const one = () => {
-        if (stopped || !active()) return;
-        const r = current = new SRX();
+    // Continuous recognition (reliable on desktop): the whole result list is read on every event; when a session ends
+    // (silence, time limit) its final words are kept and a new one starts at once.
+    function recogniseLive(S, track) {
+      let r = null, stopped = false;
+      const run = () => {
+        if (stopped || session !== S) return;
+        r = new SRX();
         r.lang = LOCALE[$('#lang').value] || 'en-IN';
         r.interimResults = true;
-        r.continuous = false;
-        r.maxAlternatives = 1;
-        let best = '';
-        r.onsoundstart = () => { S.heard = true; log('sound'); };
-        r.onspeechstart = () => { S.heard = true; say('Hearing you…'); log('speech'); };
+        r.continuous = true;
+        r.fin = '';
+        r.onspeechstart = () => say('Hearing you…');
         r.onresult = (e) => {
-          const t = Array.from(e.results).map((x) => x[0].transcript).join(' ').replace(/\s+/g, ' ').trim();
-          if (!t) return;
-          best = t; S.heard = true;
-          showText(S, t);
-          log(`result "${t}"`);
+          let fin = '', interim = '';
+          for (let i = 0; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript.trim();
+            if (e.results[i].isFinal) fin += t + ' '; else interim += t + ' ';
+          }
+          r.fin = fin;
+          const text = (S.done + fin + interim).replace(/\s+/g, ' ').trim();
+          if (text) { S.got = true; showWords(); $('#words').value = text; }
+          log('result');
         };
         r.onerror = (e) => {
           log('error ' + e.error);
-          if (e.error === 'network') say('Your words need an internet connection: check your data, or type them.');
+          if (e.error === 'network') say('Your words need an internet connection: check this device is online.');
           if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stopped = true; say('Allow the microphone for this site, or type your directions.'); }
           if (e.error === 'language-not-supported') { stopped = true; say('This language is not available here: please type your directions.'); }
         };
-        r.onend = () => {
-          if (best) { commit(S, best); showText(S); }
-          log('end ' + (best ? 'with words' : 'empty'));
-          if (!stopped && active()) setTimeout(one, 150); // next utterance
-        };
-        try { track ? r.start(track) : r.start(); log('start ' + (track ? 'on track' : 'on mic')); }
-        catch (err) { log('start failed ' + err.message); try { r.start(); } catch {} }
+        r.onend = () => { S.done += r.fin; r.fin = ''; log('end'); if (!stopped && session === S) setTimeout(run, 100); };
+        try { track ? r.start(track) : r.start(); log('start ' + (track ? 'on recording track' : 'on mic')); }
+        catch (err) { log('start ' + err.message); try { r.start(); } catch {} }
       };
-      one();
-      return { stop() { stopped = true; try { current?.stop(); } catch {} }, abort() { stopped = true; try { current?.abort(); } catch {} } };
+      run();
+      return { stop() { stopped = true; try { r?.stop(); } catch {} } };
     }
 
     async function startSession() {
-      const S = session = { base: $('#words').value.trim() ? $('#words').value.trim() + ' ' : '', pieces: [], got: false, heard: false, chunks: [], t0: Date.now(), live: true, voiceMs: 0 };
+      const S = session = { done: '', got: false, chunks: [], t0: Date.now() };
+      // a fresh recording: new voice note, new words
+      audioUrl = ''; $('#rec-audio').classList.add('hidden'); $('#rec-audio').removeAttribute('src');
+      $('#words').value = '';
       $('#mic').classList.add('live');
-      $('#rec-title').textContent = 'Listening';
+      $('#rec-title').textContent = 'Recording';
       $('#rec-state').textContent = 'Speak now · tap the mic when you are done';
-      say('Listening for your words…');
+      say('Your words appear here as you speak.');
       try {
         S.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
         S.rec = new MediaRecorder(S.stream);
@@ -332,82 +318,34 @@
         log('recording ' + (S.rec.mimeType || ''));
       } catch (e) { log('no recording: ' + e.message); session = null; $('#mic').classList.remove('live'); return startListenOnly(); }
       S.timer = setInterval(() => { if (session === S) $('#rec-state').textContent = `Recording · ${Math.round((Date.now() - S.t0) / 1000)} s · tap the mic when you are done`; }, 500);
-      if (!SRX) return;
-      // Her voice level on the recording, to tell "not speaking yet" from "speaking but recognition hears nothing".
-      try {
-        S.ac = new (window.AudioContext || window.webkitAudioContext)();
-        S.ac.resume?.();
-        const an = S.ac.createAnalyser(); an.fftSize = 1024;
-        S.ac.createMediaStreamSource(S.stream).connect(an);
-        const buf = new Uint8Array(an.fftSize);
-        S.level = setInterval(() => {
-          an.getByteTimeDomainData(buf);
-          let e = 0; for (const v of buf) e += ((v - 128) / 128) ** 2;
-          if (Math.sqrt(e / buf.length) > 0.04) S.voiceMs += 200;
-          if (S.live && !S.heard && !S.got && S.voiceMs >= 2500) {
-            // She has clearly been speaking and recognition heard nothing: the recording holds the microphone here.
-            S.live = false;
-            S.rx?.abort();
-            log('clash: words will come from the recording');
-            say('Recording your voice. Your words will appear when you finish.');
-          }
-        }, 200);
-      } catch (e) { log('no level meter: ' + e.message); }
-      S.rx = recognise(S, S.stream.getAudioTracks()[0], () => session === S && S.live);
-    }
-
-    // Her recording, played out loud at full volume and given to recognition as a track as well, to get her words when
-    // they couldn't come live. captureStream keeps the speaker output as it is.
-    function wordsFromRecording(blob, S) {
-      return new Promise((resolve) => {
-        const audio = new Audio(URL.createObjectURL(blob));
-        audio.volume = 1;
-        let done = false, rx = null;
-        const finish = () => { if (done) return; done = true; rx?.stop(); setTimeout(resolve, 900); };
-        audio.onplaying = () => {
-          if (rx) return;
-          let track = null;
-          try { track = (audio.captureStream?.() || audio.mozCaptureStream?.())?.getAudioTracks()[0] || null; } catch {}
-          log('replay ' + (track ? 'with track' : 'out loud only'));
-          rx = recognise(S, track, () => !done);
-        };
-        audio.onended = () => setTimeout(finish, 1800);
-        audio.onerror = finish;
-        setTimeout(finish, 120000);
-        audio.play().catch((e) => { log('replay failed ' + e.message); finish(); });
-      });
+      if (!SRX) { showWords(); say('Type your directions below while your voice records.'); return; }
+      S.rx = recogniseLive(S, S.stream.getAudioTracks()[0]);
     }
 
     async function stopSession() {
       const S = session;
       if (!S) return;
-      session = null;
-      clearInterval(S.timer); clearInterval(S.level);
-      S.live = false; S.rx?.stop();
-      try { S.ac?.close(); } catch {}
+      clearInterval(S.timer);
       $('#mic').classList.remove('live');
+      $('#rec-title').textContent = 'Finishing…';
+      S.rx?.stop();
+      await new Promise((r) => setTimeout(r, 700)); // the last phrase's words arrive after stop
+      session = null;
       const blob = await new Promise((res) => { S.rec.onstop = () => res(new Blob(S.chunks, { type: S.rec.mimeType || 'audio/webm' })); S.rec.stop(); });
       S.stream.getTracks().forEach((t) => t.stop());
-      await new Promise((r) => setTimeout(r, 500)); // let the last utterance's words land
       if (blob.size) {
         audioUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
         $('#rec-audio').src = audioUrl; $('#rec-audio').classList.remove('hidden');
       }
       log(`stopped: ${Math.round(blob.size / 1024)} KB voice, words ${S.got ? 'yes' : 'no'}`);
-      if (!S.got && SRX && blob.size) {
-        $('#rec-title').textContent = 'Getting your words';
-        $('#rec-state').textContent = 'One moment…';
-        say('Turning your voice into words…');
-        await wordsFromRecording(blob, S);
-      }
       const has = !!$('#words').value.trim();
-      listenOnly = !has;
       $('#rec-title').textContent = has ? 'Got your directions' : 'Voice recorded';
-      $('#rec-state').textContent = has ? 'Check the words below. Tap the mic to add more.' : 'Tap the mic and say it once more to see your words.';
-      say(has ? 'Check your words, correct anything that is wrong.' : "Couldn't get your words from the recording. Tap the mic and say it once more.");
-      if (has) showWords();
+      $('#rec-state').textContent = has ? 'Check the words below. Tap the mic to record again.' : 'No words were heard: type them below, or tap the mic to record again.';
+      say(has ? 'Check your words, correct anything that is wrong.' : 'Type your directions here.');
+      showWords();
     }
 
+    // Phones: live words only (the speech service needs the microphone to itself there).
     function startListenOnly() {
       listening = true;
       base = $('#words').value.trim() ? $('#words').value.trim() + ' ' : '';
@@ -415,14 +353,14 @@
       $('#rec-title').textContent = 'Listening';
       $('#rec-state').textContent = 'Speak now · tap the mic when you are done';
       say('Listening for your words…');
-      listenLoop().then(() => { if ($('#words').value.trim()) listenOnly = false; });
+      listenLoop();
     }
 
     $('#mic').onclick = () => {
       if (listening) return stopListening();
       if (session) return stopSession();
       if ($('#lang').value === 'auto') { $('#rec-state').textContent = 'First choose the language you speak, above.'; $('#langs').animate?.([{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }], { duration: 250, iterations: 2 }); return; }
-      if (listenOnly || !window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return startListenOnly();
+      if (PHONE || !window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return startListenOnly();
       startSession();
     };
 
@@ -488,7 +426,7 @@
     }
     $('#cartbar').onclick = openCheckout;
     $('#back').onclick = () => $('#checkout').classList.add('hidden');
-    $('#new').onclick = () => { $('#o-done-time').textContent = ''; orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#rec-audio').classList.add('hidden'); listenOnly = false; $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
+    $('#new').onclick = () => { $('#o-done-time').textContent = ''; orderId = null; try { localStorage.removeItem('instakart.order'); } catch {} clearInterval(showTrack.t); audioUrl = ''; $('#words').value = ''; $('#rec-audio').classList.add('hidden'); $('#track').classList.add('hidden'); $('#shop').classList.remove('hidden'); renderShop(); };
     try { orderId = localStorage.getItem('instakart.order'); } catch {}
     renderShop();
     if (orderId) showTrack();
