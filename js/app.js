@@ -30,16 +30,17 @@ sensors.start();
 const MODES = {
   delivery: { badge: 'Delivery', title: 'Where to?', sub: 'Speak or paste the directions exactly as the customer gave them.' },
   ambulance: { badge: 'Ambulance', title: 'Emergency call', sub: 'Type or speak what the caller said. Pahunch guides without stopping to ask.' },
-  silent: { badge: 'Silent', title: 'Where to?', sub: 'Silent mode: every instruction is shown big and felt as vibration. Nothing needs to be heard.' },
+  silent: { badge: 'Silent', title: 'Where to?', sub: 'Every instruction is spoken, shown big and felt as vibration.' },
   ride: { badge: 'Pickup', title: 'Find your passenger', sub: 'Paste where they said they are waiting: "opposite the bus stop, blue shirt".' },
 };
 const ambulance = () => document.body.dataset.mode === 'ambulance';
 const silent = () => document.body.dataset.mode === 'silent';
 
-// Every spoken line goes through here: in Silent mode it becomes a big on-screen card + flash + buzz instead.
+// Every spoken line goes through here. Silent guidance shows it as a big on-screen card + flash too (seen and felt),
+// and the voice still speaks it, as in the other modes.
 function say(line, lang = 'en') {
   say.last = { line, lang };
-  if (silent()) return showCue(line);
+  if (silent()) showCue(line);
   speakAloud(line, lang);
 }
 let cueTimer;
